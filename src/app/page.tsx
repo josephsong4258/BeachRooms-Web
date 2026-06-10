@@ -1,101 +1,166 @@
-import Image from "next/image";
+'use client';
+import { useState, useCallback, useEffect, useRef } from 'react';
+import Image from 'next/image';
+import dynamic from 'next/dynamic';
+import { useQuery } from '@tanstack/react-query';
+import { Map as MapIcon, List } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import Sidebar from '@/components/Sidebar';
+import LoadingScreen from '@/components/LoadingScreen';
+import { formatDateTimeParam } from '@/lib/time-utils';
+import type { APIResponse } from '@/types';
+
+const CampusMap = dynamic(() => import('@/components/Map'), { ssr: false });
+
+const MAP_VISIBLE_KEY = 'beachrooms_map_visible';
+
+async function fetchRooms(selectedDateTime: Date | null): Promise<APIResponse> {
+  let url = '/api/rooms';
+  if (selectedDateTime) {
+    const { date, time } = formatDateTimeParam(selectedDateTime);
+    url += `?date=${date}&time=${time}`;
+  }
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('Failed to fetch rooms');
+  return res.json();
+}
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="https://nextjs.org/icons/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+  const [selectedDateTime, setSelectedDateTime] = useState<Date | null>(null);
+  const [expandedItems, setExpandedItems] = useState<string[]>([]);
+  const [showMap, setShowMap] = useState(true);
+  const [mapReady, setMapReady] = useState(false);
+  const [showLoadingScreen, setShowLoadingScreen] = useState(true);
+  const [mountLoadingScreen, setMountLoadingScreen] = useState(true);
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="https://nextjs.org/icons/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  // Detect mobile
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 1024);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
+
+  // Restore map visibility preference
+  useEffect(() => {
+    const saved = localStorage.getItem(MAP_VISIBLE_KEY);
+    if (saved !== null) setShowMap(saved === 'true');
+  }, []);
+
+  const { data, isLoading, isFetching, error } = useQuery({
+    queryKey: ['rooms', selectedDateTime?.toISOString() ?? 'now'],
+    queryFn: () => fetchRooms(selectedDateTime),
+    refetchInterval: selectedDateTime ? false : 5 * 60 * 1000,
+  });
+
+  const buildings = data?.buildings ?? [];
+
+  const isReady = !isLoading && (isMobile || !showMap || mapReady) && !error;
+
+  useEffect(() => {
+    if (isReady) setShowLoadingScreen(false);
+  }, [isReady]);
+
+  const handleMapReady = useCallback(() => setMapReady(true), []);
+
+  const handleToggleItem = useCallback((id: string) => {
+    setExpandedItems((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  }, []);
+
+  const handleBuildingClick = useCallback((buildingId: string) => {
+    setExpandedItems((prev) =>
+      prev.includes(buildingId) ? prev : [...prev, buildingId]
+    );
+    // On mobile, switch to list view when a marker is clicked
+    if (isMobile) setShowMap(false);
+  }, [isMobile]);
+
+  function toggleMap() {
+    setShowMap((v) => {
+      const next = !v;
+      localStorage.setItem(MAP_VISIBLE_KEY, String(next));
+      return next;
+    });
+  }
+
+  return (
+    <>
+      {mountLoadingScreen && (
+        <LoadingScreen
+          show={showLoadingScreen}
+          onExited={() => setMountLoadingScreen(false)}
+          error={error ? String(error) : null}
+        />
+      )}
+
+      <div className="h-dvh flex flex-col overflow-hidden">
+        {/* Mobile header */}
+        <div className="lg:hidden flex items-center justify-between px-4 py-2 border-b bg-background z-10">
+          <Image src="/assets/logo/logo.png" alt="BeachRooms" width={180} height={36} priority className="h-8 w-auto" />
+          <Button variant="ghost" size="icon" onClick={toggleMap} aria-label="Toggle map">
+            {showMap ? <List className="h-5 w-5" /> : <MapIcon className="h-5 w-5" />}
+          </Button>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+
+        <div className="flex flex-1 overflow-hidden">
+          {/* Sidebar — full screen on mobile when map hidden, 37% on desktop */}
+          <div
+            className={`
+              flex flex-col border-r bg-background overflow-hidden
+              ${isMobile
+                ? showMap ? 'hidden' : 'w-full'
+                : 'w-[37%] min-w-[300px] max-w-[420px]'
+              }
+            `}
+          >
+            <Sidebar
+              buildings={buildings}
+              isFetching={isFetching && !isLoading}
+              selectedDateTime={selectedDateTime}
+              onDateTimeChange={setSelectedDateTime}
+              expandedItems={expandedItems}
+              onToggleItem={handleToggleItem}
+              isMobile={isMobile}
+            />
+          </div>
+
+          {/* Map — full screen on mobile when shown, 63% on desktop */}
+          <div
+            className={`
+              relative flex-1 overflow-hidden
+              ${isMobile ? (showMap ? 'block' : 'hidden') : 'block'}
+            `}
+          >
+            {/* Map toggle button on desktop */}
+            {!isMobile && (
+              <button
+                onClick={toggleMap}
+                className="absolute top-3 left-3 z-10 flex items-center gap-1.5 rounded-full bg-white/90 backdrop-blur-sm border shadow-sm px-3 py-1.5 text-xs font-medium text-foreground hover:bg-white transition-colors"
+              >
+                {showMap ? <List className="h-3.5 w-3.5" /> : <MapIcon className="h-3.5 w-3.5" />}
+                {showMap ? 'Hide map' : 'Show map'}
+              </button>
+            )}
+
+            {showMap && (
+              <CampusMap
+                buildings={buildings}
+                onBuildingClick={handleBuildingClick}
+                onMapReady={handleMapReady}
+              />
+            )}
+
+            {!showMap && !isMobile && (
+              <div className="flex h-full items-center justify-center text-muted-foreground text-sm">
+                Map hidden
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </>
   );
 }

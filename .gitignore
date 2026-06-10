@@ -27,6 +27,18 @@ yarn-error.log*
 
 # local env files
 .env*.local
+.env
+!.env.example
+!.env.local.example
+
+# python (data-pipeline)
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# jetbrains
+.idea/
 
 # vercel
 .vercel
