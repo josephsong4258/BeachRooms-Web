@@ -135,7 +135,7 @@ export default function RoomDetail({ room, building, onBack }: RoomDetailProps) 
           {/* Timeline */}
           <div>
             <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">
-              Today's Schedule
+              Today&apos;s Schedule
             </p>
             <TooltipProvider delayDuration={100}>
               <div className="grid grid-cols-7 gap-1.5">

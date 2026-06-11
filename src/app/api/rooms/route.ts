@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { unstable_cache } from 'next/cache';
 import { calculateAvailability, isBuildingOpen } from '@/lib/availability';
 import type {
   ClassroomWithBuilding,
@@ -10,6 +11,57 @@ import type {
 } from '@/types';
 
 const CURRENT_SEMESTER = 'Summer 2026';
+// Schedules only change when the scraper re-runs, so the data fetches are
+// cached. Availability is still computed per-request from the cached rows.
+const CACHE_SECONDS = 3600;
+
+function getSupabase() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+}
+
+const getClassrooms = unstable_cache(
+  async () => {
+    const { data, error } = await getSupabase()
+      .from('classrooms')
+      .select('*, building:buildings(*)')
+      .order('room_number');
+    if (error) throw new Error(error.message);
+    return data;
+  },
+  ['classrooms'],
+  { revalidate: CACHE_SECONDS }
+);
+
+const getSchedulesForDay = unstable_cache(
+  async (dayOfWeek: number) => {
+    const supabase = getSupabase();
+    // Paginate — Supabase has a 1000 row default limit
+    const allSchedules: ClassSchedule[] = [];
+    const PAGE = 1000;
+    let offset = 0;
+    let hasMore = true;
+
+    while (hasMore) {
+      const { data: batch, error } = await supabase
+        .from('class_schedules')
+        .select('*')
+        .eq('day_of_week', dayOfWeek)
+        .eq('semester', CURRENT_SEMESTER)
+        .range(offset, offset + PAGE - 1);
+
+      if (error) throw new Error(error.message);
+      allSchedules.push(...(batch ?? []));
+      hasMore = (batch?.length ?? 0) === PAGE;
+      offset += PAGE;
+    }
+    return allSchedules;
+  },
+  ['schedules'],
+  { revalidate: CACHE_SECONDS }
+);
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -22,40 +74,20 @@ export async function GET(request: NextRequest) {
     if (!isNaN(parsed.getTime())) queryTime = parsed;
   }
 
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
-
   const dayOfWeek = queryTime.getDay();
 
-  const { data: classroomsData, error: classroomsError } = await supabase
-    .from('classrooms')
-    .select('*, building:buildings(*)')
-    .order('room_number');
-
-  if (classroomsError) {
-    return NextResponse.json({ error: classroomsError.message }, { status: 500 });
-  }
-
-  // Paginate schedules — Supabase has a 1000 row default limit
-  const allSchedules: ClassSchedule[] = [];
-  const PAGE = 1000;
-  let offset = 0;
-  let hasMore = true;
-
-  while (hasMore) {
-    const { data: batch, error } = await supabase
-      .from('class_schedules')
-      .select('*')
-      .eq('day_of_week', dayOfWeek)
-      .eq('semester', CURRENT_SEMESTER)
-      .range(offset, offset + PAGE - 1);
-
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    allSchedules.push(...(batch ?? []));
-    hasMore = (batch?.length ?? 0) === PAGE;
-    offset += PAGE;
+  let classroomsData: Awaited<ReturnType<typeof getClassrooms>>;
+  let allSchedules: ClassSchedule[];
+  try {
+    [classroomsData, allSchedules] = await Promise.all([
+      getClassrooms(),
+      getSchedulesForDay(dayOfWeek),
+    ]);
+  } catch (e) {
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : 'Failed to load rooms' },
+      { status: 500 }
+    );
   }
 
   const buildingsMap: Record<string, BuildingWithRooms> = {};
@@ -128,7 +160,9 @@ export async function GET(request: NextRequest) {
 
   const response: APIResponse = { buildings, queryTime: queryTime.toISOString() };
 
+  // CDN caches each URL (incl. date/time params) briefly so bursts of users
+  // share one computation; availability is minute-granular so 60s is safe.
   return NextResponse.json(response, {
-    headers: { 'Cache-Control': 'no-store' },
+    headers: { 'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300' },
   });
 }

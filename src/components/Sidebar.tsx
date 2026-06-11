@@ -1,5 +1,5 @@
 'use client';
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import Image from 'next/image';
 import { Search, X, Calendar, RotateCcw } from 'lucide-react';
 import Fuse from 'fuse.js';
@@ -159,9 +159,6 @@ export default function Sidebar({
     if (!isNaN(dt.getTime())) onDateTimeChange(dt);
     setShowDatePicker(false);
   }
-
-  const totalAvailable = buildings.reduce((sum, b) => sum + b.availableCount, 0);
-  const totalRooms = buildings.reduce((sum, b) => sum + b.totalCount, 0);
 
   const DatePickerContent = (
     <div className="flex flex-col gap-4 p-4">

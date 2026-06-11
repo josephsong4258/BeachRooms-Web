@@ -1,5 +1,5 @@
 'use client';
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import Image from 'next/image';
 import dynamic from 'next/dynamic';
 import { useQuery } from '@tanstack/react-query';
@@ -68,7 +68,7 @@ export default function Home() {
     refetchInterval: selectedDateTime ? false : 5 * 60 * 1000,
   });
 
-  const buildings = data?.buildings ?? [];
+  const buildings = useMemo(() => data?.buildings ?? [], [data]);
 
   const isReady = !isLoading && (isMobile || !showMap || mapReady) && !error;
 

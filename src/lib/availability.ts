@@ -173,21 +173,8 @@ export function calculateAvailability(
     };
   }
 
-  if (schedules.length === 0) {
-    return {
-      classroom,
-      isAvailable: false,
-      isBuildingOpen: buildingStatus.isOpen,
-      status: 'closed',
-      nextClassStartsAt: null,
-      currentClassEndsAt: null,
-      minutesUntilNextClass: null,
-      availableDurationMinutes: null,
-      statusText: 'No classes today',
-      distanceMiles: null,
-      todaySchedules: schedules,
-    };
-  }
+  // Note: schedules.length === 0 intentionally falls through — a room with no
+  // classes in an open building is free until the building closes.
 
   let currentClass: ClassSchedule | null = null;
   let nextClass: ClassSchedule | null = null;
