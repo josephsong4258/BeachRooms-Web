@@ -3,7 +3,7 @@ import { ArrowLeft, Accessibility } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import TimeBlock from '@/components/TimeBlock';
+import HourBlock from '@/components/HourBlock';
 import RoomStatusBadge from '@/components/RoomStatusBadge';
 import type { RoomAvailability, BuildingWithRooms } from '@/types';
 
@@ -13,44 +13,60 @@ interface RoomDetailProps {
   onBack: () => void;
 }
 
-const CAMPUS_OPEN_HOUR = 7;
-const CAMPUS_CLOSE_HOUR = 22;
+// One block per hour, 8 AM through 9 PM
+const TIMELINE_HOURS = Array.from({ length: 14 }, (_, i) => i + 8);
 
-function buildTimelineBlocks(room: RoomAvailability) {
-  type Block = { startTime: string; endTime: string; isAvailable: boolean; scheduleIndex?: number };
-  const blocks: Block[] = [];
-  const schedules = [...room.todaySchedules].sort((a, b) =>
-    a.start_time.localeCompare(b.start_time)
-  );
+function formatClockTime(d: Date): string {
+  const h = d.getHours();
+  const m = d.getMinutes();
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${ampm}`;
+}
 
-  const openTime = `${String(CAMPUS_OPEN_HOUR).padStart(2, '0')}:00:00`;
-  const closeTime = `${String(CAMPUS_CLOSE_HOUR).padStart(2, '0')}:00:00`;
+function formatDuration(minutes: number): string {
+  if (minutes < 60) return `${minutes}m`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m === 0 ? `${h}h` : `${h}h ${m}m`;
+}
 
-  let cursor = openTime;
-
-  for (let i = 0; i < schedules.length; i++) {
-    const s = schedules[i];
-    if (s.start_time > cursor) {
-      blocks.push({ startTime: cursor, endTime: s.start_time, isAvailable: true });
+// Same phrasing as the room cards in the sidebar list
+function StatusLine({ room, building }: { room: RoomAvailability; building: BuildingWithRooms }) {
+  if (room.isAvailable) {
+    if (room.nextClassStartsAt && room.minutesUntilNextClass != null) {
+      return (
+        <>
+          Available for <span className="font-bold">{formatDuration(room.minutesUntilNextClass)}</span>{' '}
+          until <span className="font-bold">{formatClockTime(new Date(room.nextClassStartsAt))}</span>
+        </>
+      );
     }
-    if (s.start_time >= closeTime) break;
-    blocks.push({ startTime: s.start_time, endTime: s.end_time, isAvailable: false, scheduleIndex: i });
-    cursor = s.end_time > cursor ? s.end_time : cursor;
+    if (room.availableDurationMinutes != null && building.weekday_close) {
+      const [h, m] = building.weekday_close.split(':').map(Number);
+      const ampm = h >= 12 ? 'PM' : 'AM';
+      const closeLabel = `${h % 12 || 12}:${String(m).padStart(2, '0')} ${ampm}`;
+      return (
+        <>
+          Available for <span className="font-bold">{formatDuration(room.availableDurationMinutes)}</span>{' '}
+          until <span className="font-bold">{closeLabel}</span>
+        </>
+      );
+    }
   }
 
-  if (cursor < closeTime) {
-    blocks.push({ startTime: cursor, endTime: closeTime, isAvailable: true });
+  const m = room.statusText.match(/Free at (.+?\s[AP]M) for (.+)/);
+  if (m) {
+    return (
+      <>
+        Free at <span className="font-bold">{m[1]}</span> for <span className="font-bold">{m[2]}</span>
+      </>
+    );
   }
 
-  return blocks.map((b, i) => ({
-    ...b,
-    schedule: b.scheduleIndex !== undefined ? schedules[b.scheduleIndex] : undefined,
-    key: i,
-  }));
+  return <>{room.statusText.split('\n')[0]}</>;
 }
 
 export default function RoomDetail({ room, building, onBack }: RoomDetailProps) {
-  const blocks = buildTimelineBlocks(room);
   const sortedSchedules = [...room.todaySchedules].sort((a, b) =>
     a.start_time.localeCompare(b.start_time)
   );
@@ -73,6 +89,11 @@ export default function RoomDetail({ room, building, onBack }: RoomDetailProps) 
               {building.code} {room.room_number}
             </h2>
             <RoomStatusBadge status={room.status} />
+            {room.is_alc && (
+              <span className="rounded-full border border-[#7ee8a0] bg-[#e6f9ec] px-2 py-0.5 text-[10px] font-semibold text-[#1a9e3f]">
+                Group Study
+              </span>
+            )}
           </div>
           <p className="text-xs text-muted-foreground truncate">{building.name}</p>
         </div>
@@ -82,7 +103,9 @@ export default function RoomDetail({ room, building, onBack }: RoomDetailProps) 
         <div className="p-4 space-y-5">
           {/* Status text */}
           <div className="rounded-lg bg-muted/50 px-4 py-3">
-            <p className="text-sm font-medium whitespace-pre-line">{room.statusText}</p>
+            <p className="text-sm font-medium">
+              <StatusLine room={room} building={building} />
+            </p>
           </div>
 
           {/* Room info */}
@@ -110,36 +133,32 @@ export default function RoomDetail({ room, building, onBack }: RoomDetailProps) 
           )}
 
           {/* Timeline */}
-          {blocks.length > 0 && (
-            <div>
-              <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">
-                Today's Schedule
-              </p>
-              <TooltipProvider delayDuration={100}>
-                <div className="w-full overflow-x-auto">
-                  <div className="flex gap-1 pb-2 w-max">
-                    {blocks.map((b) => (
-                      <TimeBlock
-                        key={b.key}
-                        startTime={b.startTime}
-                        endTime={b.endTime}
-                        isAvailable={b.isAvailable}
-                        schedule={b.schedule}
-                      />
-                    ))}
-                  </div>
-                </div>
-              </TooltipProvider>
-              <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-                <span className="flex items-center gap-1">
-                  <span className="inline-block w-3 h-3 rounded bg-green-400/80" /> Available
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="inline-block w-3 h-3 rounded bg-red-400/70" /> Class
-                </span>
+          <div>
+            <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">
+              Today's Schedule
+            </p>
+            <TooltipProvider delayDuration={100}>
+              <div className="grid grid-cols-7 gap-1.5">
+                {TIMELINE_HOURS.map((h) => (
+                  <HourBlock
+                    key={h}
+                    hour={h}
+                    schedules={room.todaySchedules}
+                    buildingOpen={building.weekday_open}
+                    buildingClose={building.weekday_close}
+                  />
+                ))}
               </div>
+            </TooltipProvider>
+            <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
+              <span className="flex items-center gap-1">
+                <span className="inline-block w-3 h-3 rounded bg-[#d9f3e2] ring-1 ring-black/5" /> Open
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="inline-block w-3 h-3 rounded bg-[#f9d9dd] ring-1 ring-black/5" /> Class / Closed
+              </span>
             </div>
-          )}
+          </div>
 
           {/* Schedule list */}
           {sortedSchedules.length > 0 && (

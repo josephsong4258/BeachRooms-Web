@@ -34,7 +34,7 @@ BUILDING_CLOSE = "22:00:00"
 SKIP_LOCATIONS = {"ONLINE-ONLY", "OFF-CAMP", "TBA", "NA", ""}
 
 # Outdoor/athletic venues — not useful as study spaces
-SKIP_BUILDING_CODES = {"CTS", "FLD", "RNG", "SWM"}
+SKIP_BUILDING_CODES = {"CTS", "FLD", "RNG", "SWM", "OFF"}
 
 # Day abbreviation -> day_of_week integer (0=Sunday, 6=Saturday)
 DAY_MAP = {

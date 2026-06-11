@@ -10,8 +10,31 @@ import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from '@/components/u
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import BuildingAccordion from '@/components/BuildingAccordion';
 import RoomDetail from '@/components/RoomDetail';
+import SettingsMenu, { type AppSettings } from '@/components/SettingsMenu';
+import FilterMenu, { EMPTY_FILTERS, type RoomFilters } from '@/components/FilterMenu';
 import { formatTimeDisplay } from '@/lib/time-utils';
 import type { BuildingWithRooms, RoomAvailability } from '@/types';
+
+function parseMinutes(t: string): number {
+  const [h, m] = t.split(':').map(Number);
+  return h * 60 + m;
+}
+
+// A room is "free during" a window if the building is open for the whole
+// window and no class overlaps it.
+function isRoomFreeDuring(
+  room: RoomAvailability,
+  building: BuildingWithRooms,
+  startMin: number,
+  endMin: number
+): boolean {
+  if (!building.weekday_open || !building.weekday_close) return false;
+  if (startMin < parseMinutes(building.weekday_open)) return false;
+  if (endMin > parseMinutes(building.weekday_close)) return false;
+  return !room.todaySchedules.some(
+    (s) => parseMinutes(s.start_time) < endMin && parseMinutes(s.end_time) > startMin
+  );
+}
 
 interface SidebarProps {
   buildings: BuildingWithRooms[];
@@ -21,6 +44,8 @@ interface SidebarProps {
   expandedItems: string[];
   onToggleItem: (id: string) => void;
   isMobile: boolean;
+  settings: AppSettings;
+  onSettingsChange: (patch: Partial<AppSettings>) => void;
 }
 
 export default function Sidebar({
@@ -31,41 +56,88 @@ export default function Sidebar({
   expandedItems,
   onToggleItem,
   isMobile,
+  settings,
+  onSettingsChange,
 }: SidebarProps) {
   const [searchQuery, setSearchQuery] = useState('');
+  const [filters, setFilters] = useState<RoomFilters>(EMPTY_FILTERS);
   const [selectedRoom, setSelectedRoom] = useState<RoomAvailability | null>(null);
   const [selectedBuilding, setSelectedBuilding] = useState<BuildingWithRooms | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [pickerDate, setPickerDate] = useState('');
   const [pickerTime, setPickerTime] = useState('');
 
-  const fuse = useMemo(
-    () =>
-      new Fuse(buildings, {
-        keys: ['name', 'code'],
-        threshold: 0.3,
-      }),
-    [buildings]
-  );
+  // Apply filters (group study, free-from time window) and recompute building counts
+  const baseBuildings = useMemo(() => {
+    const { groupStudyOnly, startTime, minDurationHours } = filters;
+    const hasWindow = startTime !== null || minDurationHours !== null;
+    if (!groupStudyOnly && !hasWindow) return buildings;
 
-  const filteredBuildings = useMemo(() => {
-    const query = searchQuery.trim();
-    if (!query) return buildings;
-
-    // Check if searching for a room number
-    const roomQuery = query.replace(/[a-z]+\s*/i, '').trim();
-    if (roomQuery && /^\d+/.test(roomQuery)) {
-      return buildings
-        .map((b) => ({
-          ...b,
-          rooms: b.rooms.filter((r) => r.room_number.toLowerCase().includes(roomQuery.toLowerCase())),
-        }))
-        .filter((b) => b.rooms.length > 0);
+    let windowStartMin = 0;
+    let windowEndMin = 0;
+    if (hasWindow) {
+      if (startTime) {
+        const [h, m] = startTime.split(':').map(Number);
+        windowStartMin = h * 60 + m;
+      } else {
+        const ref = selectedDateTime ?? new Date();
+        windowStartMin = ref.getHours() * 60 + ref.getMinutes();
+      }
+      // No duration selected = just "free at that time"
+      windowEndMin = windowStartMin + Math.max((minDurationHours ?? 0) * 60, 1);
     }
 
-    const results = fuse.search(query);
-    return results.map((r) => r.item);
-  }, [buildings, searchQuery, fuse]);
+    return buildings
+      .map((b) => {
+        let rooms = b.rooms;
+        if (groupStudyOnly) rooms = rooms.filter((r) => r.is_alc);
+        if (hasWindow) {
+          rooms = rooms.filter((r) => isRoomFreeDuring(r, b, windowStartMin, windowEndMin));
+        }
+        return {
+          ...b,
+          rooms,
+          totalCount: rooms.length,
+          availableCount: rooms.filter((r) => r.isAvailable).length,
+        };
+      })
+      .filter((b) => b.rooms.length > 0);
+  }, [buildings, filters, selectedDateTime]);
+
+  // Split the query into a building part and a room-number part.
+  // "AS 120" -> building "AS", room "120"; "Liberal Arts" -> building only;
+  // "235" -> room only.
+  const { buildingSearch, roomSearch } = useMemo(() => {
+    const tokens = searchQuery.trim().split(/\s+/).filter(Boolean);
+    const last = tokens[tokens.length - 1] ?? '';
+    if (tokens.length > 0 && /^\d/.test(last)) {
+      return { buildingSearch: tokens.slice(0, -1).join(' '), roomSearch: last };
+    }
+    return { buildingSearch: searchQuery.trim(), roomSearch: '' };
+  }, [searchQuery]);
+
+  const filteredBuildings = useMemo(() => {
+    if (!buildingSearch && !roomSearch) return baseBuildings;
+
+    let list = baseBuildings;
+
+    if (roomSearch) {
+      const rq = roomSearch.toLowerCase();
+      list = list.filter((b) =>
+        b.rooms.some((r) => r.room_number.toLowerCase().includes(rq))
+      );
+    }
+
+    if (buildingSearch) {
+      const fuse = new Fuse(list, { keys: ['name', 'code'], threshold: 0.3 });
+      const matched = fuse.search(buildingSearch).map((r) => r.item);
+      // With a room number present, an unmatched building part falls back to
+      // room-only results rather than showing nothing
+      list = roomSearch && matched.length === 0 ? list : matched;
+    }
+
+    return list;
+  }, [baseBuildings, buildingSearch, roomSearch]);
 
   const isCustomTime = selectedDateTime !== null;
 
@@ -138,16 +210,23 @@ export default function Sidebar({
             priority
             className="h-10 w-auto"
           />
-          <Button
-            variant={isCustomTime ? 'secondary' : 'outline'}
-            size="sm"
-            onClick={openDatePicker}
-            disabled={isFetching}
-            className="gap-1.5 text-xs"
-          >
-            <Calendar className="h-3.5 w-3.5" />
-            {isCustomTime ? formatTimeDisplay(selectedDateTime) : 'Now'}
-          </Button>
+          <div className="flex items-center gap-1.5">
+            <Button
+              variant={isCustomTime ? 'secondary' : 'outline'}
+              size="sm"
+              onClick={openDatePicker}
+              disabled={isFetching}
+              className="gap-1.5 text-xs"
+            >
+              <Calendar className="h-3.5 w-3.5" />
+              {isCustomTime ? formatTimeDisplay(selectedDateTime) : 'Now'}
+            </Button>
+            <FilterMenu
+              filters={filters}
+              onChange={(patch) => setFilters((prev) => ({ ...prev, ...patch }))}
+            />
+            <SettingsMenu settings={settings} onChange={onSettingsChange} />
+          </div>
         </div>
 
         {isCustomTime && (
@@ -202,7 +281,7 @@ export default function Sidebar({
                   setSelectedRoom(room);
                   setSelectedBuilding(building);
                 }}
-                searchQuery={searchQuery}
+                searchQuery={roomSearch}
               />
             )}
           </div>

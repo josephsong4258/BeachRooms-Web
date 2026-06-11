@@ -20,6 +20,7 @@ export interface Classroom {
   building_id: string;
   room_number: string;
   is_accessible: boolean;
+  is_alc: boolean;
   amenities: string[];
 }
 
@@ -56,6 +57,7 @@ export interface RoomAvailability {
   id: string;
   room_number: string;
   is_accessible: boolean;
+  is_alc: boolean;
   amenities: string[];
   status: AvailabilityStatus;
   isAvailable: boolean;

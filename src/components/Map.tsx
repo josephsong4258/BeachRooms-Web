@@ -21,10 +21,17 @@ const PIN_IMAGES = [
   { id: 'pin-red', url: '/assets/pins/pin-red.png' },
 ];
 
+export interface CenterTarget {
+  lng: number;
+  lat: number;
+  key: number; // bump to re-trigger centering on the same building
+}
+
 interface MapProps {
   buildings: BuildingWithRooms[];
   onBuildingClick: (buildingId: string) => void;
   onMapReady: () => void;
+  centerTarget?: CenterTarget | null;
 }
 
 type PinFeatureCollection = GeoJSON.FeatureCollection<GeoJSON.Point, {
@@ -58,7 +65,7 @@ function toGeoJSON(buildings: BuildingWithRooms[]): PinFeatureCollection {
   };
 }
 
-export default function Map({ buildings, onBuildingClick, onMapReady }: MapProps) {
+export default function Map({ buildings, onBuildingClick, onMapReady, centerTarget }: MapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const popup = useRef<mapboxgl.Popup | null>(null);
@@ -253,6 +260,16 @@ export default function Map({ buildings, onBuildingClick, onMapReady }: MapProps
   useEffect(() => {
     updateBuildingPins();
   }, [buildings]);
+
+  // Fly to a building when asked (auto-center setting)
+  useEffect(() => {
+    if (!centerTarget || !map.current) return;
+    map.current.flyTo({
+      center: [centerTarget.lng, centerTarget.lat],
+      zoom: 17,
+      duration: 800,
+    });
+  }, [centerTarget]);
 
   return <div ref={mapContainer} className="w-full h-full" />;
 }

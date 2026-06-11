@@ -63,6 +63,8 @@ export async function GET(request: NextRequest) {
   for (const classroom of classroomsData ?? []) {
     const cw = classroom as unknown as ClassroomWithBuilding;
     if (!cw.building) continue;
+    // "OFF" = off-campus locations, not a real building
+    if (cw.building.code === 'OFF') continue;
 
     const { building } = cw;
     const roomSchedules = allSchedules.filter((s) => s.classroom_id === classroom.id);
@@ -91,6 +93,7 @@ export async function GET(request: NextRequest) {
       id: classroom.id,
       room_number: classroom.room_number,
       is_accessible: classroom.is_accessible,
+      is_alc: classroom.is_alc ?? false,
       amenities: classroom.amenities ?? [],
       status: avail.status,
       isAvailable: avail.isAvailable,

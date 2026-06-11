@@ -8,11 +8,15 @@ import { Button } from '@/components/ui/button';
 import Sidebar from '@/components/Sidebar';
 import LoadingScreen from '@/components/LoadingScreen';
 import { formatDateTimeParam } from '@/lib/time-utils';
+import type { AppSettings } from '@/components/SettingsMenu';
+import type { CenterTarget } from '@/components/Map';
 import type { APIResponse } from '@/types';
 
 const CampusMap = dynamic(() => import('@/components/Map'), { ssr: false });
 
 const MAP_VISIBLE_KEY = 'beachrooms_map_visible';
+const DARK_MODE_KEY = 'beachrooms_dark_mode';
+const AUTO_CENTER_KEY = 'beachrooms_auto_center';
 
 async function fetchRooms(selectedDateTime: Date | null): Promise<APIResponse> {
   let url = '/api/rooms';
@@ -29,6 +33,9 @@ export default function Home() {
   const [selectedDateTime, setSelectedDateTime] = useState<Date | null>(null);
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
   const [showMap, setShowMap] = useState(true);
+  const [darkMode, setDarkMode] = useState(false);
+  const [autoCenter, setAutoCenter] = useState(false);
+  const [centerTarget, setCenterTarget] = useState<CenterTarget | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [showLoadingScreen, setShowLoadingScreen] = useState(true);
   const [mountLoadingScreen, setMountLoadingScreen] = useState(true);
@@ -42,11 +49,18 @@ export default function Home() {
     return () => window.removeEventListener('resize', check);
   }, []);
 
-  // Restore map visibility preference
+  // Restore saved settings
   useEffect(() => {
-    const saved = localStorage.getItem(MAP_VISIBLE_KEY);
-    if (saved !== null) setShowMap(saved === 'true');
+    const savedMap = localStorage.getItem(MAP_VISIBLE_KEY);
+    if (savedMap !== null) setShowMap(savedMap === 'true');
+    setDarkMode(localStorage.getItem(DARK_MODE_KEY) === 'true');
+    setAutoCenter(localStorage.getItem(AUTO_CENTER_KEY) === 'true');
   }, []);
+
+  // Apply dark mode class to <html>
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', darkMode);
+  }, [darkMode]);
 
   const { data, isLoading, isFetching, error } = useQuery({
     queryKey: ['rooms', selectedDateTime?.toISOString() ?? 'now'],
@@ -65,10 +79,17 @@ export default function Home() {
   const handleMapReady = useCallback(() => setMapReady(true), []);
 
   const handleToggleItem = useCallback((id: string) => {
+    const isExpanding = !expandedItems.includes(id);
+    if (isExpanding && autoCenter) {
+      const b = buildings.find((x) => x.id === id);
+      if (b?.latitude && b?.longitude) {
+        setCenterTarget({ lng: b.longitude, lat: b.latitude, key: Date.now() });
+      }
+    }
     setExpandedItems((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+      isExpanding ? [...prev, id] : prev.filter((x) => x !== id)
     );
-  }, []);
+  }, [expandedItems, autoCenter, buildings]);
 
   const handleBuildingClick = useCallback((buildingId: string) => {
     setExpandedItems((prev) =>
@@ -85,6 +106,21 @@ export default function Home() {
       return next;
     });
   }
+
+  const handleSettingsChange = useCallback((patch: Partial<AppSettings>) => {
+    if (patch.darkMode !== undefined) {
+      setDarkMode(patch.darkMode);
+      localStorage.setItem(DARK_MODE_KEY, String(patch.darkMode));
+    }
+    if (patch.showMap !== undefined) {
+      setShowMap(patch.showMap);
+      localStorage.setItem(MAP_VISIBLE_KEY, String(patch.showMap));
+    }
+    if (patch.autoCenter !== undefined) {
+      setAutoCenter(patch.autoCenter);
+      localStorage.setItem(AUTO_CENTER_KEY, String(patch.autoCenter));
+    }
+  }, []);
 
   return (
     <>
@@ -106,13 +142,13 @@ export default function Home() {
         </div>
 
         <div className="flex flex-1 overflow-hidden">
-          {/* Sidebar — full screen on mobile when map hidden, 37% on desktop */}
+          {/* Sidebar — full screen on mobile when map hidden, 37% on desktop (full width when map hidden) */}
           <div
             className={`
-              flex flex-col border-r bg-background overflow-hidden
+              flex flex-col bg-background overflow-hidden
               ${isMobile
                 ? showMap ? 'hidden' : 'w-full'
-                : 'w-[37%] min-w-[300px] max-w-[420px]'
+                : showMap ? 'w-[37%] min-w-[300px] max-w-[420px] border-r' : 'w-full'
               }
             `}
           >
@@ -124,41 +160,22 @@ export default function Home() {
               expandedItems={expandedItems}
               onToggleItem={handleToggleItem}
               isMobile={isMobile}
+              settings={{ darkMode, showMap, autoCenter }}
+              onSettingsChange={handleSettingsChange}
             />
           </div>
 
           {/* Map — full screen on mobile when shown, 63% on desktop */}
-          <div
-            className={`
-              relative flex-1 overflow-hidden
-              ${isMobile ? (showMap ? 'block' : 'hidden') : 'block'}
-            `}
-          >
-            {/* Map toggle button on desktop */}
-            {!isMobile && (
-              <button
-                onClick={toggleMap}
-                className="absolute top-3 left-3 z-10 flex items-center gap-1.5 rounded-full bg-white/90 backdrop-blur-sm border shadow-sm px-3 py-1.5 text-xs font-medium text-foreground hover:bg-white transition-colors"
-              >
-                {showMap ? <List className="h-3.5 w-3.5" /> : <MapIcon className="h-3.5 w-3.5" />}
-                {showMap ? 'Hide map' : 'Show map'}
-              </button>
-            )}
-
-            {showMap && (
+          {showMap && (
+            <div className="relative flex-1 overflow-hidden">
               <CampusMap
                 buildings={buildings}
                 onBuildingClick={handleBuildingClick}
                 onMapReady={handleMapReady}
+                centerTarget={centerTarget}
               />
-            )}
-
-            {!showMap && !isMobile && (
-              <div className="flex h-full items-center justify-center text-muted-foreground text-sm">
-                Map hidden
-              </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </div>
     </>
