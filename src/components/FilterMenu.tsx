@@ -1,5 +1,5 @@
 'use client';
-import { SlidersHorizontal, Users, HelpCircle } from 'lucide-react';
+import { SlidersHorizontal, HelpCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Switch } from '@/components/ui/switch';
@@ -58,7 +58,6 @@ export default function FilterMenu({ filters, onChange }: FilterMenuProps) {
         {/* Group study */}
         <div className="flex items-center justify-between gap-3">
           <span className="flex items-center gap-1.5 text-sm font-medium">
-            <Users className="h-3.5 w-3.5 text-muted-foreground" />
             Group study rooms
             <TooltipProvider delayDuration={100}>
               <Tooltip>

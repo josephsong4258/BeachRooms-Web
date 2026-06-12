@@ -209,7 +209,7 @@ function RoomRow({
   // Wrapper is a div (not a button) so the star can be its own button —
   // nested buttons are invalid HTML
   return (
-    <div className="flex w-full items-center border-b border-border/60 py-2 pl-1 transition-colors last:border-b-0 hover:bg-accent/40">
+    <div className="flex w-full items-center border-b border-border/60 py-2 transition-colors last:border-b-0 hover:bg-accent/40">
       <FavoriteStar
         active={isFavorite}
         onToggle={onToggleFavorite}

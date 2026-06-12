@@ -3,7 +3,6 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import EditHandleDialog from '@/components/EditHandleDialog';
 import SignInDialog from '@/components/SignInDialog';
 import { supabase } from '@/lib/supabase';
 import { useUser } from '@/lib/use-auth';
@@ -52,7 +51,6 @@ export default function RoomComments({ roomId }: RoomCommentsProps) {
   const { user, loading: authLoading } = useUser();
   const { handle } = useProfile();
   const [draft, setDraft] = useState('');
-  const [showEditHandle, setShowEditHandle] = useState(false);
   const [showSignIn, setShowSignIn] = useState(false);
   const queryClient = useQueryClient();
 
@@ -103,14 +101,7 @@ export default function RoomComments({ roomId }: RoomCommentsProps) {
         {user && (
           <p className="text-xs text-muted-foreground">
             Commenting as{' '}
-            <span className="font-medium text-foreground/80">{handle ?? '…'}</span>{' '}
-            <button
-              type="button"
-              onClick={() => setShowEditHandle(true)}
-              className="underline-offset-2 hover:underline"
-            >
-              · Change
-            </button>
+            <span className="font-medium text-foreground/80">{handle ?? '…'}</span>
           </p>
         )}
         <textarea
@@ -123,7 +114,7 @@ export default function RoomComments({ roomId }: RoomCommentsProps) {
               setShowSignIn(true);
             }
           }}
-          placeholder="Leave a tip or critique: was it actually free? Noise, outlets, seating, AC..."
+          placeholder="Leave a tip or critique: Was the room open? Noise, outlets, seats, desk sizes, etc"
           rows={2}
           className="flex w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         />
@@ -140,7 +131,6 @@ export default function RoomComments({ roomId }: RoomCommentsProps) {
         )}
       </form>
 
-      <EditHandleDialog open={showEditHandle} onOpenChange={setShowEditHandle} />
       <SignInDialog
         open={showSignIn}
         onOpenChange={setShowSignIn}

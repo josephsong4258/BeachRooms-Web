@@ -1,5 +1,7 @@
 'use client';
-import { Settings, HelpCircle, LogOut } from 'lucide-react';
+import { useState } from 'react';
+import { Settings, HelpCircle, LogOut, Pencil } from 'lucide-react';
+import EditHandleDialog from '@/components/EditHandleDialog';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Switch } from '@/components/ui/switch';
@@ -63,8 +65,10 @@ function SettingRow({
 export default function SettingsMenu({ settings, onChange }: SettingsMenuProps) {
   const { user } = useUser();
   const { handle } = useProfile();
+  const [showEditHandle, setShowEditHandle] = useState(false);
 
   return (
+    <>
     <Popover>
       <PopoverTrigger asChild>
         <Button variant="outline" size="icon" className="h-8 w-8 shrink-0" aria-label="Settings">
@@ -93,7 +97,14 @@ export default function SettingsMenu({ settings, onChange }: SettingsMenuProps) 
         </TooltipProvider>
         {user && (
           <div className="flex items-center justify-between gap-3 border-t pt-3">
-            <p className="min-w-0 truncate text-sm text-muted-foreground">{handle ?? 'Signed in'}</p>
+            <button
+              onClick={() => setShowEditHandle(true)}
+              aria-label="Change handle"
+              className="flex min-w-0 items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <span className="truncate">{handle ?? 'Signed in'}</span>
+              <Pencil className="h-3 w-3 shrink-0" />
+            </button>
             <button
               onClick={() => signOut()}
               className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
@@ -105,5 +116,7 @@ export default function SettingsMenu({ settings, onChange }: SettingsMenuProps) 
         )}
       </PopoverContent>
     </Popover>
+    <EditHandleDialog open={showEditHandle} onOpenChange={setShowEditHandle} />
+    </>
   );
 }
