@@ -1,7 +1,7 @@
 'use client';
 import { memo, useMemo, useState } from 'react';
 import Image from 'next/image';
-import { ChevronDown, ChevronUp, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronUp, ChevronRight, Star } from 'lucide-react';
 import type { BuildingWithRooms, RoomAvailability } from '@/types';
 
 const OPENING_SOON_MINUTES = 30;
@@ -14,6 +14,21 @@ interface BuildingAccordionProps {
   onToggle: (id: string) => void;
   onRoomClick: (room: RoomAvailability, building: BuildingWithRooms) => void;
   searchQuery: string;
+  favoriteRoomIds: Set<string>;
+  favoriteBuildingIds: Set<string>;
+  onToggleFavoriteRoom: (id: string) => void;
+  onToggleFavoriteBuilding: (id: string) => void;
+  // Hidden while searching — search results take over the whole list
+  showFavorites: boolean;
+}
+
+function classifyRoom(room: RoomAvailability, now: number): RoomGroup {
+  if (room.isAvailable) return 'available';
+  if (room.status === 'in_use' && room.currentClassEndsAt) {
+    const minutes = Math.floor((new Date(room.currentClassEndsAt).getTime() - now) / 60000);
+    if (minutes > 0 && minutes <= OPENING_SOON_MINUTES) return 'openingSoon';
+  }
+  return 'occupied';
 }
 
 function groupRooms(rooms: RoomAvailability[]) {
@@ -23,19 +38,10 @@ function groupRooms(rooms: RoomAvailability[]) {
   const occupied: RoomAvailability[] = [];
 
   for (const r of rooms) {
-    if (r.isAvailable) {
-      available.push(r);
-      continue;
-    }
-    if (r.status === 'in_use' && r.currentClassEndsAt) {
-      const endsAt = new Date(r.currentClassEndsAt).getTime();
-      const minutes = Math.floor((endsAt - now) / 60000);
-      if (minutes > 0 && minutes <= OPENING_SOON_MINUTES) {
-        openingSoon.push(r);
-        continue;
-      }
-    }
-    occupied.push(r);
+    const group = classifyRoom(r, now);
+    if (group === 'available') available.push(r);
+    else if (group === 'openingSoon') openingSoon.push(r);
+    else occupied.push(r);
   }
 
   openingSoon.sort((a, b) => {
@@ -153,39 +159,76 @@ function StatusText({ room, type }: { room: RoomAvailability; type: RoomGroup })
   );
 }
 
+function FavoriteStar({
+  active,
+  onToggle,
+  label,
+}: {
+  active: boolean;
+  onToggle: () => void;
+  label: string;
+}) {
+  return (
+    <button
+      onClick={onToggle}
+      aria-label={label}
+      aria-pressed={active}
+      className="shrink-0 p-1"
+    >
+      <Star
+        className={
+          active
+            ? 'h-3.5 w-3.5 fill-[#f0b429] text-[#f0b429]'
+            : 'h-3.5 w-3.5 text-muted-foreground/40 transition-colors hover:text-muted-foreground'
+        }
+      />
+    </button>
+  );
+}
+
 function RoomRow({
   room,
   type,
   buildingCode,
   onClick,
+  isFavorite,
+  onToggleFavorite,
 }: {
   room: RoomAvailability;
   type: RoomGroup;
   buildingCode: string;
   onClick: () => void;
+  isFavorite: boolean;
+  onToggleFavorite: () => void;
 }) {
   const minutesUntilFree =
     type === 'openingSoon' && room.currentClassEndsAt
       ? Math.max(1, Math.floor((new Date(room.currentClassEndsAt).getTime() - Date.now()) / 60000))
       : null;
 
+  // Wrapper is a div (not a button) so the star can be its own button —
+  // nested buttons are invalid HTML
   return (
-    <button
-      onClick={onClick}
-      className="flex w-full items-center border-b border-border/60 py-2 pl-3 text-left transition-colors last:border-b-0 hover:bg-accent/40"
-    >
-      <PinIcon type={type} />
-      <div className="ml-2.5 min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold">
-            {buildingCode} {room.room_number}
-          </span>
-          {minutesUntilFree !== null && <CountdownChip minutes={minutesUntilFree} />}
+    <div className="flex w-full items-center border-b border-border/60 py-2 pl-1 transition-colors last:border-b-0 hover:bg-accent/40">
+      <FavoriteStar
+        active={isFavorite}
+        onToggle={onToggleFavorite}
+        label={isFavorite ? 'Remove room from favorites' : 'Add room to favorites'}
+      />
+      <button onClick={onClick} className="flex min-w-0 flex-1 items-center text-left">
+        <PinIcon type={type} />
+        <div className="ml-2.5 min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold">
+              {buildingCode} {room.room_number}
+            </span>
+            {minutesUntilFree !== null && <CountdownChip minutes={minutesUntilFree} />}
+          </div>
+          <StatusText room={room} type={type} />
         </div>
-        <StatusText room={room} type={type} />
-      </div>
+      </button>
       <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
-    </button>
+    </div>
   );
 }
 
@@ -215,12 +258,20 @@ function BuildingItem({
   onToggleBuilding,
   onRoomClick,
   searchQuery,
+  isFavorite,
+  onToggleFavorite,
+  favoriteRoomIds,
+  onToggleFavoriteRoom,
 }: {
   building: BuildingWithRooms;
   expanded: boolean;
   onToggleBuilding: (id: string) => void;
   onRoomClick: (room: RoomAvailability, building: BuildingWithRooms) => void;
   searchQuery: string;
+  isFavorite: boolean;
+  onToggleFavorite: () => void;
+  favoriteRoomIds: Set<string>;
+  onToggleFavoriteRoom: (id: string) => void;
 }) {
   const [availOpen, setAvailOpen] = useState(true);
   const [soonOpen, setSoonOpen] = useState(true);
@@ -241,20 +292,27 @@ function BuildingItem({
 
   return (
     <div className="border-b border-border/60">
-      <button
-        onClick={() => onToggleBuilding(building.id)}
-        className="flex w-full items-center justify-between py-2 pr-1 text-left"
-      >
-        <span className="text-sm font-semibold text-foreground/85">{building.name}</span>
-        <div className="flex items-center gap-2">
-          <CountBadge available={available.length} total={totalVisible} />
-          {expanded ? (
-            <ChevronUp className="h-3.5 w-3.5 text-foreground/70" />
-          ) : (
-            <ChevronDown className="h-3.5 w-3.5 text-foreground/70" />
-          )}
-        </div>
-      </button>
+      <div className="flex w-full items-center py-2 pr-1">
+        <FavoriteStar
+          active={isFavorite}
+          onToggle={onToggleFavorite}
+          label={isFavorite ? 'Remove building from favorites' : 'Add building to favorites'}
+        />
+        <button
+          onClick={() => onToggleBuilding(building.id)}
+          className="flex min-w-0 flex-1 items-center justify-between text-left"
+        >
+          <span className="ml-1 truncate text-sm font-semibold text-foreground/85">{building.name}</span>
+          <div className="flex shrink-0 items-center gap-2 pl-2">
+            <CountBadge available={available.length} total={totalVisible} />
+            {expanded ? (
+              <ChevronUp className="h-3.5 w-3.5 text-foreground/70" />
+            ) : (
+              <ChevronDown className="h-3.5 w-3.5 text-foreground/70" />
+            )}
+          </div>
+        </button>
+      </div>
 
       {expanded && (
         <div className="pb-1">
@@ -273,6 +331,8 @@ function BuildingItem({
                     type="available"
                     buildingCode={building.code}
                     onClick={() => onRoomClick(r, building)}
+                    isFavorite={favoriteRoomIds.has(r.id)}
+                    onToggleFavorite={() => onToggleFavoriteRoom(r.id)}
                   />
                 ))}
             </>
@@ -293,6 +353,8 @@ function BuildingItem({
                     type="openingSoon"
                     buildingCode={building.code}
                     onClick={() => onRoomClick(r, building)}
+                    isFavorite={favoriteRoomIds.has(r.id)}
+                    onToggleFavorite={() => onToggleFavoriteRoom(r.id)}
                   />
                 ))}
             </>
@@ -313,6 +375,8 @@ function BuildingItem({
                     type="occupied"
                     buildingCode={building.code}
                     onClick={() => onRoomClick(r, building)}
+                    isFavorite={favoriteRoomIds.has(r.id)}
+                    onToggleFavorite={() => onToggleFavoriteRoom(r.id)}
                   />
                 ))}
             </>
@@ -323,15 +387,49 @@ function BuildingItem({
   );
 }
 
+function SectionDivider() {
+  return <div className="my-1.5 h-px bg-border" aria-hidden="true" />;
+}
+
 function BuildingAccordion({
   buildings,
   expandedItems,
   onToggle,
   onRoomClick,
   searchQuery,
+  favoriteRoomIds,
+  favoriteBuildingIds,
+  onToggleFavoriteRoom,
+  onToggleFavoriteBuilding,
+  showFavorites,
 }: BuildingAccordionProps) {
-  const withAvail = buildings.filter((b) => b.availableCount > 0);
-  const without = buildings.filter((b) => b.availableCount === 0);
+  const now = Date.now();
+
+  // Pinned favorite rooms, sorted like rooms within a building: available
+  // first, then by building code and numeric room number
+  const favoriteRooms = showFavorites
+    ? buildings
+        .flatMap((b) =>
+          b.rooms
+            .filter((r) => favoriteRoomIds.has(r.id))
+            .map((r) => ({ room: r, building: b }))
+        )
+        .sort((a, b) => {
+          if (a.room.isAvailable !== b.room.isAvailable) return a.room.isAvailable ? -1 : 1;
+          const byCode = a.building.code.localeCompare(b.building.code);
+          if (byCode !== 0) return byCode;
+          return a.room.room_number.localeCompare(b.room.room_number, undefined, { numeric: true });
+        })
+    : [];
+
+  // Favorited buildings move to the top section rather than appearing twice
+  const favoriteBuildings = showFavorites
+    ? buildings.filter((b) => favoriteBuildingIds.has(b.id))
+    : [];
+  const mainBuildings = showFavorites
+    ? buildings.filter((b) => !favoriteBuildingIds.has(b.id))
+    : buildings;
+  const hasFavorites = favoriteRooms.length > 0 || favoriteBuildings.length > 0;
 
   const renderBuilding = (b: BuildingWithRooms) => (
     <BuildingItem
@@ -341,13 +439,34 @@ function BuildingAccordion({
       onToggleBuilding={onToggle}
       onRoomClick={onRoomClick}
       searchQuery={searchQuery}
+      isFavorite={favoriteBuildingIds.has(b.id)}
+      onToggleFavorite={() => onToggleFavoriteBuilding(b.id)}
+      favoriteRoomIds={favoriteRoomIds}
+      onToggleFavoriteRoom={onToggleFavoriteRoom}
     />
   );
 
   return (
     <div className="w-full px-2">
-      {withAvail.map(renderBuilding)}
-      {without.map(renderBuilding)}
+      {hasFavorites && (
+        <>
+          {favoriteRooms.map(({ room, building }) => (
+            <RoomRow
+              key={`fav-${room.id}`}
+              room={room}
+              type={classifyRoom(room, now)}
+              buildingCode={building.code}
+              onClick={() => onRoomClick(room, building)}
+              isFavorite
+              onToggleFavorite={() => onToggleFavoriteRoom(room.id)}
+            />
+          ))}
+          {favoriteRooms.length > 0 && favoriteBuildings.length > 0 && <SectionDivider />}
+          {favoriteBuildings.map(renderBuilding)}
+          <SectionDivider />
+        </>
+      )}
+      {mainBuildings.map(renderBuilding)}
     </div>
   );
 }

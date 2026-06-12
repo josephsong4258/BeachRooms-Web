@@ -68,7 +68,7 @@ const getSchedulesForDay = unstable_cache(
     // snapshot that shows the whole campus free for an hour. Weekends
     // legitimately have no rows.
     if (allSchedules.length === 0 && dayOfWeek !== 0 && dayOfWeek !== 6) {
-      throw new Error('No schedule data available — try again shortly');
+      throw new Error('No schedule data available. Try again shortly.');
     }
     return allSchedules;
   },
@@ -173,11 +173,7 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  buildings.sort((a: BuildingWithRooms, b: BuildingWithRooms) => {
-    if (a.availableCount !== b.availableCount) return b.availableCount - a.availableCount;
-    if (a.isOpen !== b.isOpen) return a.isOpen ? -1 : 1;
-    return a.name.localeCompare(b.name);
-  });
+  buildings.sort((a: BuildingWithRooms, b: BuildingWithRooms) => a.name.localeCompare(b.name));
 
   const response: APIResponse = { buildings, queryTime: queryTime.toISOString() };
 

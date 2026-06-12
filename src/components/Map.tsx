@@ -1,13 +1,13 @@
 'use client';
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import type { BuildingWithRooms } from '@/types';
 
-const CSULB_CENTER: [number, number] = [-118.112521, 33.779218];
-const INITIAL_ZOOM = 16.42;
-const INITIAL_PITCH = 52.99;
-const INITIAL_BEARING = 0;
+const CSULB_CENTER: [number, number] = [-118.113356, 33.779057];
+const INITIAL_ZOOM = 17.20;
+const INITIAL_PITCH = 56.99;
+const INITIAL_BEARING = 21.6;
 const MIN_ZOOM = 14;
 const MAX_ZOOM = 18;
 const CSULB_BOUNDS: [[number, number], [number, number]] = [
@@ -16,10 +16,14 @@ const CSULB_BOUNDS: [[number, number], [number, number]] = [
 ];
 const DEFAULT_STYLE = 'mapbox://styles/josephsong23/cmip4pzo400e501st3fdjay4h';
 
-const PIN_IMAGES = [
-  { id: 'pin-green', url: '/assets/pins/pin-green.png' },
-  { id: 'pin-red', url: '/assets/pins/pin-red.png' },
-];
+// Per-building label placement overrides (default: below the pin), for spots
+// where the default would sit on a neighboring pin or label.
+const LABEL_PLACEMENT: Record<string, 'top' | 'right' | 'left'> = {
+  ECS: 'top', // Engineering/Computer Science
+  ET: 'top', // Engineering Technology
+  HSD: 'top', // Human Services & Design
+  SPA: 'right', // Social Science/Public Affairs
+};
 
 export interface CenterTarget {
   lng: number;
@@ -34,42 +38,26 @@ interface MapProps {
   centerTarget?: CenterTarget | null;
 }
 
-type PinFeatureCollection = GeoJSON.FeatureCollection<GeoJSON.Point, {
-  id: string;
-  name: string;
-  code: string;
-  available: boolean;
-  availableCount: number;
-  totalCount: number;
-  isOpen: boolean;
-}>;
+function pinUrl(b: BuildingWithRooms): string {
+  return b.availableCount > 0 ? '/assets/pins/pin-green.png' : '/assets/pins/pin-red.png';
+}
 
-function toGeoJSON(buildings: BuildingWithRooms[]): PinFeatureCollection {
-  return {
-    type: 'FeatureCollection',
-    features: buildings
-      .filter((b) => b.latitude && b.longitude)
-      .map((b) => ({
-        type: 'Feature',
-        properties: {
-          id: b.id,
-          name: b.name,
-          code: b.code,
-          available: b.availableCount > 0,
-          availableCount: b.availableCount,
-          totalCount: b.totalCount,
-          isOpen: b.isOpen,
-        },
-        geometry: { type: 'Point', coordinates: [b.longitude, b.latitude] },
-      })),
-  };
+function popupHtml(b: BuildingWithRooms): string {
+  return `<div style="font-family:sans-serif;padding:2px 0">
+    <div style="font-weight:600;font-size:13px">${b.name}</div>
+    <div style="font-size:12px;color:#6b7280;margin-top:2px">
+      ${b.isOpen ? `${b.availableCount}/${b.totalCount} rooms available` : 'Closed'}
+    </div>
+  </div>`;
 }
 
 export default function Map({ buildings, onBuildingClick, onMapReady, centerTarget }: MapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const popup = useRef<mapboxgl.Popup | null>(null);
-  const mapLoaded = useRef(false);
+  // Building id -> marker. DOM markers live outside the WebGL pipeline, so
+  // no collision/occlusion system can ever hide them.
+  const markers = useRef<Record<string, mapboxgl.Marker>>({});
   const onMapReadyCalled = useRef(false);
 
   // Refs for callbacks/data referenced inside Mapbox event handlers, so the
@@ -79,12 +67,67 @@ export default function Map({ buildings, onBuildingClick, onMapReady, centerTarg
   useEffect(() => { buildingsRef.current = buildings; }, [buildings]);
   useEffect(() => { onBuildingClickRef.current = onBuildingClick; }, [onBuildingClick]);
 
-  function updateBuildingPins() {
-    if (!map.current || !mapLoaded.current) return;
-    const src = map.current.getSource('building-pins') as mapboxgl.GeoJSONSource | undefined;
-    if (!src) return;
-    src.setData(toGeoJSON(buildingsRef.current));
-  }
+  const makeMarkerElement = useCallback(function makeMarkerElement(buildingId: string): HTMLDivElement {
+    const el = document.createElement('div');
+    el.className = 'building-marker';
+    const img = document.createElement('img');
+    img.alt = '';
+    img.draggable = false;
+    const label = document.createElement('div');
+    label.className = 'building-marker-label';
+    el.append(img, label);
+
+    el.addEventListener('mouseenter', () => {
+      const m = map.current;
+      const b = buildingsRef.current.find((x) => x.id === buildingId);
+      if (!m || !b) return;
+      popup.current?.setLngLat([b.longitude, b.latitude]).setHTML(popupHtml(b)).addTo(m);
+    });
+    el.addEventListener('mouseleave', () => popup.current?.remove());
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const m = map.current;
+      const b = buildingsRef.current.find((x) => x.id === buildingId);
+      if (!m || !b) return;
+      m.flyTo({ center: [b.longitude, b.latitude], zoom: 17, duration: 800 });
+      onBuildingClickRef.current(buildingId);
+    });
+    return el;
+  }, []);
+
+  const updateBuildingPins = useCallback(() => {
+    const m = map.current;
+    if (!m) return;
+
+    const seen = new Set<string>();
+    for (const b of buildingsRef.current) {
+      if (!b.latitude || !b.longitude) continue;
+      seen.add(b.id);
+
+      let marker = markers.current[b.id];
+      if (!marker) {
+        marker = new mapboxgl.Marker({ element: makeMarkerElement(b.id), anchor: 'center' });
+        marker.setLngLat([b.longitude, b.latitude]).addTo(m);
+        markers.current[b.id] = marker;
+      } else {
+        marker.setLngLat([b.longitude, b.latitude]);
+      }
+
+      const el = marker.getElement();
+      (el.querySelector('img') as HTMLImageElement).src = pinUrl(b);
+      const label = el.querySelector('.building-marker-label') as HTMLDivElement;
+      label.textContent = b.name ?? b.code;
+      const placement = LABEL_PLACEMENT[b.code];
+      label.className = `building-marker-label${placement ? ` label-${placement}` : ''}`;
+    }
+
+    for (const [id, marker] of Object.entries(markers.current)) {
+      if (!seen.has(id)) {
+        marker.remove();
+        delete markers.current[id];
+      }
+    }
+  }, [makeMarkerElement]);
 
   useEffect(() => {
     if (!mapContainer.current || map.current) return;
@@ -104,6 +147,30 @@ export default function Map({ buildings, onBuildingClick, onMapReady, centerTarg
     });
 
     map.current.addControl(new mapboxgl.NavigationControl({ visualizePitch: true }), 'bottom-right');
+
+    // Scale markers with zoom (mirrors the old symbol-layer size ramps) via
+    // CSS vars the .building-marker styles read.
+    const container = mapContainer.current;
+    const applyPinScale = () => {
+      const z = map.current?.getZoom() ?? INITIAL_ZOOM;
+      const iconT = Math.min(Math.max((z - 14) / (18 - 14), 0), 1);
+      const fontT = Math.min(Math.max((z - 13) / (18 - 13), 0), 1);
+      container.style.setProperty('--pin-size', `${Math.round(13 + 19 * iconT)}px`);
+      container.style.setProperty('--pin-font', `${(8 + 4 * fontT).toFixed(1)}px`);
+    };
+    applyPinScale();
+    map.current.on('zoom', applyPinScale);
+
+    if (!popup.current) {
+      popup.current = new mapboxgl.Popup({
+        offset: 14,
+        closeButton: false,
+        closeOnClick: false,
+      });
+    }
+
+    // Markers don't need the style to be loaded
+    updateBuildingPins();
 
     map.current.on('load', () => {
       const m = map.current;
@@ -139,109 +206,6 @@ export default function Map({ buildings, onBuildingClick, onMapReady, centerTarg
         });
       }
 
-      // Load pin images — async, ok if layer is added before they finish
-      for (const { id, url } of PIN_IMAGES) {
-        if (m.hasImage(id)) continue;
-        m.loadImage(url, (err, image) => {
-          if (err || !image) return;
-          if (!m.hasImage(id)) m.addImage(id, image);
-        });
-      }
-
-      // Building-pin source + symbol layers
-      if (!m.getSource('building-pins')) {
-        m.addSource('building-pins', {
-          type: 'geojson',
-          data: { type: 'FeatureCollection', features: [] },
-        });
-
-        // One layer for pin + label so they place together. Icons always
-        // render (allow-overlap); labels join collision detection instead of
-        // stacking over neighboring pins in dense clusters — when there's no
-        // room the label is dropped but the pin stays (text-optional), and
-        // placed pins block other labels from covering them.
-        m.addLayer({
-          id: 'building-pins-icon',
-          type: 'symbol',
-          source: 'building-pins',
-          layout: {
-            'icon-image': ['case', ['get', 'available'], 'pin-green', 'pin-red'],
-            'icon-size': [
-              'interpolate', ['linear'], ['zoom'],
-              14, 0.2,
-              18, 0.5,
-            ],
-            'icon-allow-overlap': true,
-            'icon-pitch-alignment': 'viewport',
-            'text-field': ['get', 'name'],
-            'text-size': [
-              'interpolate', ['linear'], ['zoom'],
-              13, 8,
-              18, 12,
-            ],
-            'text-font': ['DIN Pro Bold', 'Open Sans Bold', 'Arial Unicode MS Bold'],
-            'text-offset': [0, 0.9],
-            'text-anchor': 'top',
-            'text-optional': true,
-          },
-          paint: {
-            // GL JS v3 hides symbols occluded by fill-extrusions; the pins sit
-            // at ground level inside the 3D buildings, so without this they
-            // only show up zoomed in. Render them at full opacity regardless.
-            'icon-occlusion-opacity': 1,
-            'text-occlusion-opacity': 1,
-            'text-color': '#1f2937',
-            'text-halo-color': '#ffffff',
-            'text-halo-width': 1.2,
-          },
-        });
-      }
-
-      // Shared popup re-used on each hover
-      if (!popup.current) {
-        popup.current = new mapboxgl.Popup({
-          offset: 14,
-          closeButton: false,
-          closeOnClick: false,
-        });
-      }
-
-      m.on('mouseenter', 'building-pins-icon', (e) => {
-        const f = e.features?.[0];
-        if (!f) return;
-        const p = f.properties as PinFeatureCollection['features'][number]['properties'];
-        const coords = (f.geometry as GeoJSON.Point).coordinates as [number, number];
-        m.getCanvas().style.cursor = 'pointer';
-        popup.current
-          ?.setLngLat(coords)
-          .setHTML(
-            `<div style="font-family:sans-serif;padding:2px 0">
-              <div style="font-weight:600;font-size:13px">${p.name}</div>
-              <div style="font-size:12px;color:#6b7280;margin-top:2px">
-                ${p.isOpen ? `${p.availableCount}/${p.totalCount} rooms available` : 'Closed'}
-              </div>
-            </div>`
-          )
-          .addTo(m);
-      });
-
-      m.on('mouseleave', 'building-pins-icon', () => {
-        m.getCanvas().style.cursor = '';
-        popup.current?.remove();
-      });
-
-      m.on('click', 'building-pins-icon', (e) => {
-        const f = e.features?.[0];
-        if (!f) return;
-        const p = f.properties as PinFeatureCollection['features'][number]['properties'];
-        const coords = (f.geometry as GeoJSON.Point).coordinates as [number, number];
-        m.flyTo({ center: coords, zoom: 17, duration: 800 });
-        onBuildingClickRef.current(p.id);
-      });
-
-      mapLoaded.current = true;
-      updateBuildingPins();
-
       if (!onMapReadyCalled.current) {
         onMapReadyCalled.current = true;
         onMapReady();
@@ -251,17 +215,17 @@ export default function Map({ buildings, onBuildingClick, onMapReady, centerTarg
     return () => {
       popup.current?.remove();
       popup.current = null;
-      map.current?.remove();
+      map.current?.remove(); // also removes the markers
       map.current = null;
-      mapLoaded.current = false;
+      markers.current = {};
       onMapReadyCalled.current = false;
     };
-  }, [onMapReady]);
+  }, [onMapReady, updateBuildingPins]);
 
-  // Push new building data into the GeoJSON source whenever buildings changes
+  // Reconcile markers whenever buildings changes
   useEffect(() => {
     updateBuildingPins();
-  }, [buildings]);
+  }, [buildings, updateBuildingPins]);
 
   // Fly to a building when asked (auto-center setting)
   useEffect(() => {

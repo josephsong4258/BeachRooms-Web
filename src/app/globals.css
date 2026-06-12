@@ -73,3 +73,63 @@
 .mapboxgl-ctrl-logo {
   display: none !important;
 }
+
+/* Building pins — DOM markers (always visible; sized via --pin-size/--pin-font
+   CSS vars that Map.tsx updates on zoom) */
+.building-marker {
+  position: relative;
+  width: var(--pin-size, 24px);
+  height: var(--pin-size, 24px);
+  cursor: pointer;
+}
+
+.building-marker img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.building-marker-label {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 1px;
+  white-space: nowrap;
+  font-size: var(--pin-font, 11px);
+  font-weight: 700;
+  line-height: 1.15;
+  color: #1f2937;
+  text-shadow:
+    -1px -1px 0 #fff,
+    1px -1px 0 #fff,
+    -1px 1px 0 #fff,
+    1px 1px 0 #fff,
+    0 0 3px #fff;
+  pointer-events: none;
+}
+
+/* Label placement variants (default sits below the pin) */
+.building-marker-label.label-top {
+  top: auto;
+  bottom: 100%;
+  margin-top: 0;
+  margin-bottom: 1px;
+}
+
+.building-marker-label.label-right {
+  top: 50%;
+  left: 100%;
+  margin-top: 0;
+  margin-left: 3px;
+  transform: translateY(-50%);
+}
+
+.building-marker-label.label-left {
+  top: 50%;
+  left: auto;
+  right: 100%;
+  margin-top: 0;
+  margin-right: 3px;
+  transform: translateY(-50%);
+}
