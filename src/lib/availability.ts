@@ -5,6 +5,18 @@ import type {
   AvailabilityStatus,
 } from '@/types';
 
+// All math in this module uses local-time Date methods (getDay/setHours), so
+// "now" must be campus wall-clock time. The server's own timezone can't be
+// trusted (Vercel runs UTC, where every Pacific evening reads as the next
+// day's small hours).
+const CAMPUS_TIME_ZONE = 'America/Los_Angeles';
+
+export function campusNow(): Date {
+  // A Date whose local fields hold campus wall-clock time. Only its local
+  // fields are meaningful — it is not the true instant.
+  return new Date(new Date().toLocaleString('en-US', { timeZone: CAMPUS_TIME_ZONE }));
+}
+
 export function parseTimeToday(timeString: string, referenceDate: Date = new Date()): Date {
   const parts = timeString.split(':').map(Number);
   const hours = parts[0];
@@ -262,8 +274,11 @@ export function calculateAvailability(
     };
   }
 
+  // Anchor to now, not freeStartTime — the UI renders this as "Available for
+  // Xh until close", which must mean time remaining, not the free block's
+  // full length (a no-class room at 9 PM is free for 1h, not 14h).
   const closeDurationMinutes = Math.floor(
-    (buildingStatus.closesAt.getTime() - freeStartTime.getTime()) / 60000
+    (buildingStatus.closesAt.getTime() - now.getTime()) / 60000
   );
   return {
     classroom,
@@ -274,7 +289,7 @@ export function calculateAvailability(
     currentClassEndsAt: null,
     minutesUntilNextClass: null,
     availableDurationMinutes: closeDurationMinutes,
-    statusText: formatFreeUntilWithDuration(freeStartTime, buildingStatus.closesAt, closeDurationMinutes),
+    statusText: formatFreeUntilWithDuration(now, buildingStatus.closesAt, closeDurationMinutes),
     distanceMiles: null,
     todaySchedules: schedules,
   };

@@ -18,8 +18,11 @@ import requests
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 
-BASE_URL = "https://web.csulb.edu/depts/enrollment/registration/class_schedule/Summer_2026/By_Subject/"
 SEMESTER = "Summer 2026"
+BASE_URL = (
+    "https://web.csulb.edu/depts/enrollment/registration/class_schedule/"
+    f"{SEMESTER.replace(' ', '_')}/By_Subject/"
+)
 BATCH_SIZE = 200
 REQUEST_DELAY = 1.0  # seconds between page fetches
 DEFAULT_CAPACITY = 30  # schedule pages don't include room capacity
@@ -338,6 +341,22 @@ def process_sections(supabase_client, sections: list[dict], dry_run: bool = Fals
     return inserted_count, skipped_count
 
 
+def request_revalidation():
+    """Tell the web app to drop its cached rooms data so the fresh scrape is
+    live immediately instead of waiting out the hourly cache expiry."""
+    url = os.environ.get("REVALIDATE_URL")
+    secret = os.environ.get("REVALIDATE_SECRET")
+    if not url or not secret:
+        print("  (REVALIDATE_URL/REVALIDATE_SECRET not set — app cache expires on its own within an hour)")
+        return
+    try:
+        resp = requests.post(url, headers={"x-revalidate-secret": secret}, timeout=10)
+        resp.raise_for_status()
+        print("  Web app cache revalidated")
+    except Exception as e:
+        print(f"  WARN: cache revalidation failed: {e}")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Scrape CSULB class schedules")
     parser.add_argument(
@@ -361,10 +380,6 @@ def main():
 
         supabase_client = create_client(url, key)
 
-        # Clear all existing schedules
-        print(f"Clearing all existing schedules...")
-        supabase_client.table("class_schedules").delete().gte("created_at", "1970-01-01").execute()
-
     # Fetch all subject URLs from base URL (SEM_2025/By_Subject)
     print("Fetching subject index...")
     subject_urls = get_subject_urls()
@@ -387,13 +402,29 @@ def main():
 
     print(f"\nParsed {len(all_sections)} total sections")
 
+    # An empty crawl means the site changed or was unreachable — bail out
+    # before touching the database.
+    if not all_sections:
+        print("ERROR: no sections parsed — leaving existing data untouched")
+        sys.exit(1)
+
     mode = "DRY RUN" if args.dry_run else "Inserting"
     print(f"\n{mode}...")
+
+    # Wipe-then-reload, deferred until after the crawl so the live table is
+    # only empty for the few seconds of batched inserts, not the entire
+    # multi-minute crawl.
+    if not args.dry_run:
+        print("Clearing all existing schedules...")
+        supabase_client.table("class_schedules").delete().gte("created_at", "1970-01-01").execute()
 
     # Process the parsed sections and insert them into supabase
     inserted, skipped = process_sections(
         supabase_client, all_sections, dry_run=args.dry_run
     )
+
+    if not args.dry_run:
+        request_revalidation()
 
     print(f"\nDone!")
     print(f"  Schedule rows {'would insert' if args.dry_run else 'inserted'}: {inserted}")

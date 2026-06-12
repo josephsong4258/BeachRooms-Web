@@ -155,6 +155,11 @@ export default function Map({ buildings, onBuildingClick, onMapReady, centerTarg
           data: { type: 'FeatureCollection', features: [] },
         });
 
+        // One layer for pin + label so they place together. Icons always
+        // render (allow-overlap); labels join collision detection instead of
+        // stacking over neighboring pins in dense clusters — when there's no
+        // room the label is dropped but the pin stays (text-optional), and
+        // placed pins block other labels from covering them.
         m.addLayer({
           id: 'building-pins-icon',
           type: 'symbol',
@@ -168,26 +173,23 @@ export default function Map({ buildings, onBuildingClick, onMapReady, centerTarg
             ],
             'icon-allow-overlap': true,
             'icon-pitch-alignment': 'viewport',
-          },
-        });
-
-        m.addLayer({
-          id: 'building-pins-label',
-          type: 'symbol',
-          source: 'building-pins',
-          layout: {
             'text-field': ['get', 'name'],
             'text-size': [
               'interpolate', ['linear'], ['zoom'],
-              13, 9,
-              18, 14,
+              13, 8,
+              18, 12,
             ],
             'text-font': ['DIN Pro Bold', 'Open Sans Bold', 'Arial Unicode MS Bold'],
-            'text-offset': [0, 1.5],
+            'text-offset': [0, 0.9],
             'text-anchor': 'top',
-            'text-allow-overlap': true,
+            'text-optional': true,
           },
           paint: {
+            // GL JS v3 hides symbols occluded by fill-extrusions; the pins sit
+            // at ground level inside the 3D buildings, so without this they
+            // only show up zoomed in. Render them at full opacity regardless.
+            'icon-occlusion-opacity': 1,
+            'text-occlusion-opacity': 1,
             'text-color': '#1f2937',
             'text-halo-color': '#ffffff',
             'text-halo-width': 1.2,
