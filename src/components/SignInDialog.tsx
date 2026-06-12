@@ -25,9 +25,10 @@ export default function SignInDialog({
           <Button variant="outline" onClick={() => signInWithProvider('google')}>
             Continue with Google
           </Button>
-          <Button variant="outline" onClick={() => signInWithProvider('apple')}>
-            Continue with Apple
-          </Button>
+          {/* Apple sign-in disabled until an Apple Developer account is set up:
+              <Button variant="outline" onClick={() => signInWithProvider('apple')}>
+                Continue with Apple
+              </Button> */}
         </div>
       </DialogContent>
     </Dialog>

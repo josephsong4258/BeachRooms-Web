@@ -23,6 +23,12 @@ const LABEL_PLACEMENT: Record<string, 'top' | 'right' | 'left'> = {
   ET: 'top', // Engineering Technology
   HSD: 'top', // Human Services & Design
   SPA: 'right', // Social Science/Public Affairs
+  EN2: 'left', // Engineering 2
+  LA1: 'right', // Liberal Arts 1
+  LA2: 'right', // Liberal Arts 2
+  LA3: 'right', // Liberal Arts 3
+  LA4: 'right', // Liberal Arts 4
+  LA5: 'right', // Liberal Arts 5
 };
 
 export interface CenterTarget {
