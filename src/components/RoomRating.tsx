@@ -86,7 +86,7 @@ export default function RoomRating({ roomId, onRequireSignIn }: RoomRatingProps)
 
   return (
     <div className="flex items-center justify-between gap-3 rounded-lg bg-muted/50 px-4 py-3">
-      <p className="text-sm font-medium">Was this room actually free?</p>
+      <p className="text-sm font-medium">Was the room free?</p>
       <div className="flex shrink-0 gap-1.5">
         <button
           onClick={() => handleVote(true)}
