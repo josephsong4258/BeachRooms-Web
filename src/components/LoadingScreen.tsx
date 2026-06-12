@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import Image from 'next/image';
 
 interface LoadingScreenProps {
   show: boolean;
@@ -24,7 +25,22 @@ export default function LoadingScreen({ show, onExited, error }: LoadingScreenPr
         visible ? 'opacity-100' : 'opacity-0 pointer-events-none'
       }`}
     >
-      <h1 className="text-2xl font-bold text-primary mb-6">BeachRooms</h1>
+      <Image
+        src="/assets/logo/logo.png"
+        alt="BeachRooms"
+        width={280}
+        height={56}
+        priority
+        className="mb-6 h-12 w-auto dark:hidden"
+      />
+      <Image
+        src="/assets/logo/logo_dark.png"
+        alt="BeachRooms"
+        width={280}
+        height={56}
+        priority
+        className="mb-6 hidden h-12 w-auto dark:block"
+      />
       {error ? (
         <div className="rounded-md bg-destructive/10 border border-destructive px-4 py-3 text-destructive text-sm max-w-xs text-center">
           {error}

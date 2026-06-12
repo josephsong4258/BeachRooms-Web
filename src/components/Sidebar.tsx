@@ -1,5 +1,5 @@
 'use client';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import Image from 'next/image';
 import { Search, X, Calendar, RotateCcw } from 'lucide-react';
 import Fuse from 'fuse.js';
@@ -12,6 +12,8 @@ import BuildingAccordion from '@/components/BuildingAccordion';
 import RoomDetail from '@/components/RoomDetail';
 import SettingsMenu, { type AppSettings } from '@/components/SettingsMenu';
 import FilterMenu, { EMPTY_FILTERS, type RoomFilters } from '@/components/FilterMenu';
+import SignInDialog from '@/components/SignInDialog';
+import { useFavorites } from '@/lib/use-favorites';
 import { formatTimeDisplay } from '@/lib/time-utils';
 import type { BuildingWithRooms, RoomAvailability } from '@/types';
 
@@ -66,6 +68,24 @@ export default function Sidebar({
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [pickerDate, setPickerDate] = useState('');
   const [pickerTime, setPickerTime] = useState('');
+  const [showSignIn, setShowSignIn] = useState(false);
+
+  const {
+    signedIn,
+    favoriteRoomIds,
+    favoriteBuildingIds,
+    toggleRoomFavorite,
+    toggleBuildingFavorite,
+  } = useFavorites();
+
+  const handleToggleFavoriteRoom = useCallback(
+    (id: string) => (signedIn ? toggleRoomFavorite(id) : setShowSignIn(true)),
+    [signedIn, toggleRoomFavorite]
+  );
+  const handleToggleFavoriteBuilding = useCallback(
+    (id: string) => (signedIn ? toggleBuildingFavorite(id) : setShowSignIn(true)),
+    [signedIn, toggleBuildingFavorite]
+  );
 
   // Apply filters (group study, free-from time window) and recompute building counts
   const baseBuildings = useMemo(() => {
@@ -279,11 +299,18 @@ export default function Sidebar({
                   setSelectedBuilding(building);
                 }}
                 searchQuery={roomSearch}
+                favoriteRoomIds={favoriteRoomIds}
+                favoriteBuildingIds={favoriteBuildingIds}
+                onToggleFavoriteRoom={handleToggleFavoriteRoom}
+                onToggleFavoriteBuilding={handleToggleFavoriteBuilding}
+                showFavorites={searchQuery.trim() === ''}
               />
             )}
           </div>
         </ScrollArea>
       </div>
+
+      <SignInDialog open={showSignIn} onOpenChange={setShowSignIn} />
 
       {/* Date picker — drawer on mobile, dialog on desktop */}
       {isMobile ? (

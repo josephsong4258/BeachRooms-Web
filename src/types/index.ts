@@ -88,3 +88,13 @@ export interface APIResponse {
   buildings: BuildingWithRooms[];
   queryTime: string;
 }
+
+export interface RoomComment {
+  id: string;
+  classroom_id: string;
+  user_id: string;
+  content: string;
+  created_at: string;
+  // Embedded by PostgREST via the comments.user_id -> profiles FK
+  profile: { display_name: string } | null;
+}

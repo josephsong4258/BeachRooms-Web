@@ -1,10 +1,15 @@
 'use client';
-import { ArrowLeft, Accessibility } from 'lucide-react';
+import { useState } from 'react';
+import { ArrowLeft, Accessibility, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import HourBlock from '@/components/HourBlock';
+import RoomComments from '@/components/RoomComments';
+import RoomRating from '@/components/RoomRating';
 import RoomStatusBadge from '@/components/RoomStatusBadge';
+import SignInDialog from '@/components/SignInDialog';
+import { useFavorites } from '@/lib/use-favorites';
 import type { RoomAvailability, BuildingWithRooms } from '@/types';
 
 interface RoomDetailProps {
@@ -67,6 +72,10 @@ function StatusLine({ room, building }: { room: RoomAvailability; building: Buil
 }
 
 export default function RoomDetail({ room, building, onBack }: RoomDetailProps) {
+  const { signedIn, favoriteRoomIds, toggleRoomFavorite } = useFavorites();
+  const [showSignIn, setShowSignIn] = useState(false);
+  const isFavorite = favoriteRoomIds.has(room.id);
+
   const sortedSchedules = [...room.todaySchedules].sort((a, b) =>
     a.start_time.localeCompare(b.start_time)
   );
@@ -97,7 +106,29 @@ export default function RoomDetail({ room, building, onBack }: RoomDetailProps) 
           </div>
           <p className="text-xs text-muted-foreground truncate">{building.name}</p>
         </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="ml-auto shrink-0"
+          onClick={() => (signedIn ? toggleRoomFavorite(room.id) : setShowSignIn(true))}
+          aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+          aria-pressed={isFavorite}
+        >
+          <Star
+            className={
+              isFavorite
+                ? 'h-4 w-4 fill-[#f0b429] text-[#f0b429]'
+                : 'h-4 w-4 text-muted-foreground'
+            }
+          />
+        </Button>
       </div>
+
+      <SignInDialog
+        open={showSignIn}
+        onOpenChange={setShowSignIn}
+        message="Sign in to rate rooms and save favorites across your devices."
+      />
 
       <ScrollArea className="flex-1">
         <div className="p-4 space-y-5">
@@ -107,6 +138,9 @@ export default function RoomDetail({ room, building, onBack }: RoomDetailProps) 
               <StatusLine room={room} building={building} />
             </p>
           </div>
+
+          {/* Availability rating */}
+          <RoomRating roomId={room.id} onRequireSignIn={() => setShowSignIn(true)} />
 
           {/* Room info */}
           {room.is_accessible && (
@@ -181,6 +215,9 @@ export default function RoomDetail({ room, building, onBack }: RoomDetailProps) 
               </div>
             </div>
           )}
+
+          {/* Comments */}
+          <RoomComments roomId={room.id} />
         </div>
       </ScrollArea>
     </div>
