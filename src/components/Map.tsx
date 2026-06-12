@@ -4,7 +4,7 @@ import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import type { BuildingWithRooms } from '@/types';
 
-const CSULB_CENTER: [number, number] = [-118.113356, 33.779057];
+const CSULB_CENTER: [number, number] = [-118.113603, 33.778675];
 const INITIAL_ZOOM = 17.20;
 const INITIAL_PITCH = 56.99;
 const INITIAL_BEARING = 21.6;
@@ -24,11 +24,6 @@ const LABEL_PLACEMENT: Record<string, 'top' | 'right' | 'left'> = {
   HSD: 'top', // Human Services & Design
   SPA: 'right', // Social Science/Public Affairs
   EN2: 'left', // Engineering 2
-  LA1: 'right', // Liberal Arts 1
-  LA2: 'right', // Liberal Arts 2
-  LA3: 'right', // Liberal Arts 3
-  LA4: 'right', // Liberal Arts 4
-  LA5: 'right', // Liberal Arts 5
 };
 
 export interface CenterTarget {
