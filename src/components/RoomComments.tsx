@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import EditHandleDialog from '@/components/EditHandleDialog';
 import SignInDialog from '@/components/SignInDialog';
 import { supabase } from '@/lib/supabase';
-import { useUser, signOut } from '@/lib/use-auth';
+import { useUser } from '@/lib/use-auth';
 import { useProfile } from '@/lib/use-profile';
 import type { RoomComment } from '@/types';
 
@@ -88,19 +88,9 @@ export default function RoomComments({ roomId }: RoomCommentsProps) {
 
   return (
     <div>
-      <div className="mb-2 flex items-center justify-between">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          Comments{comments ? ` (${comments.length})` : ''}
-        </p>
-        {user && (
-          <button
-            onClick={() => signOut()}
-            className="text-xs text-muted-foreground underline-offset-2 hover:underline"
-          >
-            Sign out
-          </button>
-        )}
-      </div>
+      <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        Comments{comments ? ` (${comments.length})` : ''}
+      </p>
 
       {/* Composer — always visible; focusing it while signed out prompts sign-in */}
       <form

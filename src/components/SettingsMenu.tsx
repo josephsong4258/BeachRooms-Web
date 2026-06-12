@@ -1,8 +1,10 @@
 'use client';
-import { Settings, HelpCircle } from 'lucide-react';
+import { Settings, HelpCircle, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Switch } from '@/components/ui/switch';
+import { useUser, signOut } from '@/lib/use-auth';
+import { useProfile } from '@/lib/use-profile';
 import {
   Tooltip,
   TooltipContent,
@@ -59,6 +61,9 @@ function SettingRow({
 }
 
 export default function SettingsMenu({ settings, onChange }: SettingsMenuProps) {
+  const { user } = useUser();
+  const { handle } = useProfile();
+
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -86,6 +91,18 @@ export default function SettingsMenu({ settings, onChange }: SettingsMenuProps) 
             onCheckedChange={(v) => onChange({ autoCenter: v })}
           />
         </TooltipProvider>
+        {user && (
+          <div className="flex items-center justify-between gap-3 border-t pt-3">
+            <p className="min-w-0 truncate text-sm text-muted-foreground">{handle ?? 'Signed in'}</p>
+            <button
+              onClick={() => signOut()}
+              className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              Sign out
+            </button>
+          </div>
+        )}
       </PopoverContent>
     </Popover>
   );

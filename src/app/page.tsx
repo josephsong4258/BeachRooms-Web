@@ -34,7 +34,7 @@ export default function Home() {
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
   const [showMap, setShowMap] = useState(true);
   const [darkMode, setDarkMode] = useState(false);
-  const [autoCenter, setAutoCenter] = useState(false);
+  const [autoCenter, setAutoCenter] = useState(true);
   const [centerTarget, setCenterTarget] = useState<CenterTarget | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [showLoadingScreen, setShowLoadingScreen] = useState(true);
@@ -54,7 +54,8 @@ export default function Home() {
     const savedMap = localStorage.getItem(MAP_VISIBLE_KEY);
     if (savedMap !== null) setShowMap(savedMap === 'true');
     setDarkMode(localStorage.getItem(DARK_MODE_KEY) === 'true');
-    setAutoCenter(localStorage.getItem(AUTO_CENTER_KEY) === 'true');
+    // Default on: only an explicit opt-out disables it
+    setAutoCenter(localStorage.getItem(AUTO_CENTER_KEY) !== 'false');
   }, []);
 
   // Apply dark mode class to <html>
