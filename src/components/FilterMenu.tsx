@@ -55,37 +55,6 @@ export default function FilterMenu({ filters, onChange }: FilterMenuProps) {
       <PopoverContent align="end" className="w-64 space-y-4">
         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Filters</p>
 
-        {/* Group study */}
-        <div className="flex items-center justify-between gap-3">
-          <span className="flex items-center gap-1.5 text-sm font-medium">
-            Group study rooms
-            <TooltipProvider delayDuration={100}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    aria-label="What are group study rooms?"
-                    className="text-muted-foreground/70 hover:text-muted-foreground"
-                  >
-                    <HelpCircle className="h-3.5 w-3.5" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="top" className="max-w-[220px]">
-                  <p className="text-xs">
-                    Active Learning Classrooms designed for group work, with movable seating and
-                    collaborative layouts.
-                  </p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </span>
-          <Switch
-            checked={filters.groupStudyOnly}
-            onCheckedChange={(v) => onChange({ groupStudyOnly: v })}
-            aria-label="Group study rooms"
-          />
-        </div>
-
         {/* Start time */}
         <div className="space-y-1.5">
           <label className="text-sm font-medium">Free starting at</label>
@@ -119,6 +88,36 @@ export default function FilterMenu({ filters, onChange }: FilterMenuProps) {
               );
             })}
           </div>
+        </div>
+
+        {/* Group study */}
+        <div className="flex items-center justify-between gap-3">
+          <span className="flex items-center gap-1.5 text-sm font-medium">
+            Group study rooms
+            <TooltipProvider delayDuration={100}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label="What are group study rooms?"
+                    className="text-muted-foreground/70 hover:text-muted-foreground"
+                  >
+                    <HelpCircle className="h-3.5 w-3.5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="max-w-[220px]">
+                  <p className="text-xs">Classrooms designed for group work, with movable seating and
+                    collaborative layouts.
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </span>
+          <Switch
+            checked={filters.groupStudyOnly}
+            onCheckedChange={(v) => onChange({ groupStudyOnly: v })}
+            aria-label="Group study rooms"
+          />
         </div>
 
         {activeCount > 0 && (
