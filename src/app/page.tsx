@@ -17,6 +17,7 @@ const CampusMap = dynamic(() => import('@/components/Map'), { ssr: false });
 const MAP_VISIBLE_KEY = 'beachrooms_map_visible';
 const DARK_MODE_KEY = 'beachrooms_dark_mode';
 const AUTO_CENTER_KEY = 'beachrooms_auto_center';
+const SHOW_PARKING_KEY = 'beachrooms_show_parking';
 
 async function fetchRooms(selectedDateTime: Date | null): Promise<APIResponse> {
   let url = '/api/rooms';
@@ -35,6 +36,7 @@ export default function Home() {
   const [showMap, setShowMap] = useState(true);
   const [darkMode, setDarkMode] = useState(false);
   const [autoCenter, setAutoCenter] = useState(true);
+  const [showParking, setShowParking] = useState(true);
   const [centerTarget, setCenterTarget] = useState<CenterTarget | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [showLoadingScreen, setShowLoadingScreen] = useState(true);
@@ -54,8 +56,9 @@ export default function Home() {
     const savedMap = localStorage.getItem(MAP_VISIBLE_KEY);
     if (savedMap !== null) setShowMap(savedMap === 'true');
     setDarkMode(localStorage.getItem(DARK_MODE_KEY) === 'true');
-    // Default on: only an explicit opt-out disables it
+    // Default on: only an explicit opt-out disables these
     setAutoCenter(localStorage.getItem(AUTO_CENTER_KEY) !== 'false');
+    setShowParking(localStorage.getItem(SHOW_PARKING_KEY) !== 'false');
   }, []);
 
   // Apply dark mode class to <html>
@@ -121,6 +124,10 @@ export default function Home() {
       setAutoCenter(patch.autoCenter);
       localStorage.setItem(AUTO_CENTER_KEY, String(patch.autoCenter));
     }
+    if (patch.showParking !== undefined) {
+      setShowParking(patch.showParking);
+      localStorage.setItem(SHOW_PARKING_KEY, String(patch.showParking));
+    }
   }, []);
 
   return (
@@ -161,7 +168,7 @@ export default function Home() {
               expandedItems={expandedItems}
               onToggleItem={handleToggleItem}
               isMobile={isMobile}
-              settings={{ darkMode, showMap, autoCenter }}
+              settings={{ darkMode, showMap, autoCenter, showParking }}
               onSettingsChange={handleSettingsChange}
             />
           </div>
@@ -174,6 +181,7 @@ export default function Home() {
                 onBuildingClick={handleBuildingClick}
                 onMapReady={handleMapReady}
                 centerTarget={centerTarget}
+                showParking={showParking}
               />
             </div>
           )}

@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
+import { PARKING_LOTS, type ParkingLot } from '@/data/parking';
 import type { BuildingWithRooms } from '@/types';
 
 const CSULB_CENTER: [number, number] = [-118.113603, 33.778675];
@@ -37,10 +38,87 @@ interface MapProps {
   onBuildingClick: (buildingId: string) => void;
   onMapReady: () => void;
   centerTarget?: CenterTarget | null;
+  showParking?: boolean;
 }
+
+const PARKING_LAYER_IDS = [
+  'parking-areas-fill',
+  'parking-areas-outline',
+  'parking-areas',
+  'parking-areas-icon',
+];
 
 function pinUrl(b: BuildingWithRooms): string {
   return b.availableCount > 0 ? '/assets/pins/pin-green.png' : '/assets/pins/pin-red.png';
+}
+
+// Employee lots allow general parking weekdays after 5:30 PM and all day
+// Saturday and Sunday.
+function isEmployeeLotOpenToAll(d: Date): boolean {
+  const day = d.getDay();
+  if (day === 0 || day === 6) return true;
+  return d.getHours() > 17 || (d.getHours() === 17 && d.getMinutes() >= 30);
+}
+
+// Green = student can park right now, red = they can't
+function isParkingOpenNow(lot: ParkingLot): boolean {
+  return lot.type === 'student' || isEmployeeLotOpenToAll(new Date());
+}
+
+// Traced lots render as shaded shapes beneath the 3D buildings; lots with
+// `size` set (parking structures) render as circle badges above them, since
+// a structure's footprint would be hidden under its own building model.
+function parkingGeoJSON(): GeoJSON.FeatureCollection {
+  return {
+    type: 'FeatureCollection',
+    features: PARKING_LOTS.map((lot) => ({
+      type: 'Feature',
+      geometry: lot.polygon && !lot.size
+        ? // GeoJSON rings must be closed: repeat the first vertex at the end
+          { type: 'Polygon', coordinates: [[...lot.polygon, lot.polygon[0]]] }
+        : { type: 'Point', coordinates: [lot.longitude, lot.latitude] },
+      properties: {
+        name: lot.name,
+        lotType: lot.type,
+        open: isParkingOpenNow(lot),
+        size: lot.size ?? 1,
+      },
+    })),
+  };
+}
+
+function parkingPopupHtml(name: string, lotType: string, open: boolean): string {
+  if (lotType === 'student') {
+    return `<div style="font-family:sans-serif;padding:2px 0">
+      <div style="font-weight:600;font-size:13px">${name}</div>
+      <div style="font-size:12px;color:#1a9e3f;margin-top:2px">Student parking</div>
+    </div>`;
+  }
+  if (open) {
+    return `<div style="font-family:sans-serif;padding:2px 0">
+      <div style="font-weight:600;font-size:13px">${name}</div>
+      <div style="font-size:12px;color:#1a9e3f;margin-top:2px">You can park here now</div>
+      <div style="font-size:11px;color:#6b7280;margin-top:2px;max-width:200px">
+        Employee lot. Open to students after 5:30 PM.
+      </div>
+    </div>`;
+  }
+
+  // Restricted right now, so it's a weekday before 5:30 PM; count down to it
+  const now = new Date();
+  const minutesUntilOpen = 17 * 60 + 30 - (now.getHours() * 60 + now.getMinutes());
+  const h = Math.floor(minutesUntilOpen / 60);
+  const m = minutesUntilOpen % 60;
+  const countdown = h > 0 ? `${h}h ${m}m` : `${m}m`;
+  return `<div style="font-family:sans-serif;padding:2px 0">
+    <div style="font-weight:600;font-size:13px">${name}</div>
+    <div style="font-size:12px;color:#c9303a;margin-top:2px">
+      Employee parking only.
+    </div>
+    <div style="font-size:11px;color:#6b7280;margin-top:2px;max-width:200px">
+      Employee parking lots open to students in ${countdown} (5:30 PM).
+    </div>
+  </div>`;
 }
 
 function popupHtml(b: BuildingWithRooms): string {
@@ -52,7 +130,13 @@ function popupHtml(b: BuildingWithRooms): string {
   </div>`;
 }
 
-export default function Map({ buildings, onBuildingClick, onMapReady, centerTarget }: MapProps) {
+export default function Map({
+  buildings,
+  onBuildingClick,
+  onMapReady,
+  centerTarget,
+  showParking = true,
+}: MapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const popup = useRef<mapboxgl.Popup | null>(null);
@@ -65,8 +149,21 @@ export default function Map({ buildings, onBuildingClick, onMapReady, centerTarg
   // handlers always see the latest values without us re-registering them.
   const buildingsRef = useRef(buildings);
   const onBuildingClickRef = useRef(onBuildingClick);
+  const showParkingRef = useRef(showParking);
   useEffect(() => { buildingsRef.current = buildings; }, [buildings]);
   useEffect(() => { onBuildingClickRef.current = onBuildingClick; }, [onBuildingClick]);
+
+  // Toggle parking layers; the ref carries the initial value into the map's
+  // load handler for the first render
+  useEffect(() => {
+    showParkingRef.current = showParking;
+    const m = map.current;
+    if (!m) return;
+    const visibility = showParking ? 'visible' : 'none';
+    for (const id of PARKING_LAYER_IDS) {
+      if (m.getLayer(id)) m.setLayoutProperty(id, 'visibility', visibility);
+    }
+  }, [showParking]);
 
   const makeMarkerElement = useCallback(function makeMarkerElement(buildingId: string): HTMLDivElement {
     const el = document.createElement('div');
@@ -173,6 +270,56 @@ export default function Map({ buildings, onBuildingClick, onMapReady, centerTarg
     // Markers don't need the style to be loaded
     updateBuildingPins();
 
+    // Set once the style loads (parking renders as canvas layers, not markers)
+    let parkingTimer: number | undefined;
+
+    // Dev-only coordinate picker, stripped from production builds.
+    //   click       -> copies "latitude: ..., longitude: ..." (and resets any trace)
+    //   shift+click -> appends a vertex to a polygon trace; the full
+    //                  "polygon: [...]" snippet is copied after every click
+    if (process.env.NODE_ENV === 'development') {
+      // Mapbox's shift+drag box zoom captures shift+clicks before they reach
+      // the click handler; disable it in dev so the polygon tracer works
+      map.current.boxZoom.disable();
+
+      // Feedback goes to a click-through HUD in the corner (a popup at the
+      // click point would block the next vertex click)
+      const coordHud = document.createElement('div');
+      coordHud.style.cssText =
+        'position:absolute;bottom:10px;left:10px;z-index:10;display:none;' +
+        'background:rgba(0,0,0,.75);color:#fff;font:11px/1.4 monospace;' +
+        'padding:4px 8px;border-radius:4px;pointer-events:none;max-width:70%;';
+      container.appendChild(coordHud);
+      let hudTimer: number | undefined;
+
+      let trace: [number, number][] = [];
+      map.current.on('click', (e) => {
+        const lat = Number(e.lngLat.lat.toFixed(6));
+        const lng = Number(e.lngLat.lng.toFixed(6));
+        let snippet: string;
+        let label: string;
+        if (e.originalEvent.shiftKey) {
+          trace.push([lng, lat]);
+          snippet = `polygon: [${trace.map(([x, y]) => `[${x}, ${y}]`).join(', ')}]`;
+          label = `Polygon point ${trace.length} - copied`;
+        } else {
+          trace = [];
+          snippet = `latitude: ${lat}, longitude: ${lng}`;
+          label = 'Copied';
+        }
+        navigator.clipboard?.writeText(snippet).catch(() => {});
+        console.log(`[coords] ${snippet}`);
+        coordHud.textContent = `${label}: ${
+          snippet.length > 90 ? '…' + snippet.slice(-90) : snippet
+        }`;
+        coordHud.style.display = 'block';
+        if (hudTimer !== undefined) window.clearTimeout(hudTimer);
+        hudTimer = window.setTimeout(() => {
+          coordHud.style.display = 'none';
+        }, 2500);
+      });
+    }
+
     map.current.on('load', () => {
       const m = map.current;
       if (!m) return;
@@ -207,6 +354,114 @@ export default function Map({ buildings, onBuildingClick, onMapReady, centerTarg
         });
       }
 
+      // Parking areas: translucent ground-hugging circles, green when the
+      // student can park there right now, red when they can't. Canvas layer,
+      // so they sit beneath the building pins instead of competing with them.
+      if (!m.getSource('parking')) {
+        m.addSource('parking', { type: 'geojson', data: parkingGeoJSON() });
+        // Traced lots: shaded shape with an outline
+        // The style imports the Mapbox Standard basemap, whose 3D buildings
+        // live inside the import where beforeId can't reach. slot 'middle'
+        // places these above roads but beneath the basemap's buildings, so
+        // lots read as paint on the ground and buildings occlude them.
+        m.addLayer({
+          id: 'parking-areas-fill',
+          type: 'fill',
+          source: 'parking',
+          slot: 'middle',
+          filter: ['==', ['geometry-type'], 'Polygon'],
+          paint: {
+            'fill-color': ['case', ['get', 'open'], '#22a04a', '#d23b44'],
+            'fill-opacity': 0.25,
+          },
+        });
+        m.addLayer({
+          id: 'parking-areas-outline',
+          type: 'line',
+          source: 'parking',
+          slot: 'middle',
+          filter: ['==', ['geometry-type'], 'Polygon'],
+          paint: {
+            'line-color': ['case', ['get', 'open'], '#1a9e3f', '#c9303a'],
+            'line-opacity': 0.7,
+            'line-width': 1.5,
+          },
+        });
+        // Structures (and untraced lots): solid "P" badge above the 3D
+        // buildings, since a structure's footprint would be buried inside
+        // its own building model
+        m.addLayer({
+          id: 'parking-areas',
+          type: 'circle',
+          source: 'parking',
+          filter: ['==', ['geometry-type'], 'Point'],
+          paint: {
+            'circle-color': ['case', ['get', 'open'], '#1a9e3f', '#c9303a'],
+            'circle-opacity': 0.9,
+            'circle-stroke-color': '#ffffff',
+            'circle-stroke-opacity': 0.9,
+            'circle-stroke-width': 1.5,
+            'circle-radius': [
+              'interpolate', ['linear'], ['zoom'],
+              14, ['*', 3, ['get', 'size']],
+              16, ['*', 7, ['get', 'size']],
+              18, ['*', 14, ['get', 'size']],
+            ],
+          },
+        });
+        m.addLayer({
+          id: 'parking-areas-icon',
+          type: 'symbol',
+          source: 'parking',
+          filter: ['==', ['geometry-type'], 'Point'],
+          layout: {
+            'text-field': 'P',
+            'text-font': ['DIN Pro Bold', 'Arial Unicode MS Bold'],
+            'text-allow-overlap': true,
+            'text-size': [
+              'interpolate', ['linear'], ['zoom'],
+              14, ['*', 4, ['get', 'size']],
+              16, ['*', 8, ['get', 'size']],
+              18, ['*', 16, ['get', 'size']],
+            ],
+          },
+          paint: { 'text-color': '#ffffff' },
+        });
+
+        // Respect the setting if it was off before the style finished loading
+        if (!showParkingRef.current) {
+          for (const id of PARKING_LAYER_IDS) m.setLayoutProperty(id, 'visibility', 'none');
+        }
+
+        const showParkingPopup = (e: mapboxgl.MapLayerMouseEvent) => {
+          const f = e.features?.[0];
+          if (!f) return;
+          const p = f.properties as { name: string; lotType: string; open: boolean | string };
+          const open = p.open === true || p.open === 'true';
+          popup.current
+            ?.setLngLat(e.lngLat)
+            .setHTML(parkingPopupHtml(p.name, p.lotType, open))
+            .addTo(m);
+        };
+        // mouseenter covers desktop hover; click covers touch devices
+        for (const layerId of ['parking-areas', 'parking-areas-fill']) {
+          m.on('mouseenter', layerId, (e) => {
+            m.getCanvas().style.cursor = 'pointer';
+            showParkingPopup(e);
+          });
+          m.on('mouseleave', layerId, () => {
+            m.getCanvas().style.cursor = '';
+            popup.current?.remove();
+          });
+          m.on('click', layerId, showParkingPopup);
+        }
+
+        // Employee lots flip between restricted/open at 5:30 PM
+        parkingTimer = window.setInterval(() => {
+          (m.getSource('parking') as mapboxgl.GeoJSONSource | undefined)?.setData(parkingGeoJSON());
+        }, 60_000);
+      }
+
       if (!onMapReadyCalled.current) {
         onMapReadyCalled.current = true;
         onMapReady();
@@ -214,6 +469,7 @@ export default function Map({ buildings, onBuildingClick, onMapReady, centerTarg
     });
 
     return () => {
+      if (parkingTimer !== undefined) window.clearInterval(parkingTimer);
       popup.current?.remove();
       popup.current = null;
       map.current?.remove(); // also removes the markers

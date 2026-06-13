@@ -18,6 +18,7 @@ export interface AppSettings {
   darkMode: boolean;
   showMap: boolean;
   autoCenter: boolean;
+  showParking: boolean;
 }
 
 interface SettingsMenuProps {
@@ -87,6 +88,12 @@ export default function SettingsMenu({ settings, onChange }: SettingsMenuProps) 
             label="Hide map"
             checked={!settings.showMap}
             onCheckedChange={(v) => onChange({ showMap: !v })}
+          />
+          <SettingRow
+            label="Show parking"
+            help="Highlights campus parking on the map: green where you can park right now, red where you can't."
+            checked={settings.showParking}
+            onCheckedChange={(v) => onChange({ showParking: v })}
           />
           <SettingRow
             label="Auto-center building"
