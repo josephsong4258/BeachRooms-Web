@@ -25,6 +25,11 @@ const LABEL_PLACEMENT: Record<string, 'top' | 'right' | 'left'> = {
   HSD: 'top', // Human Services & Design
   SPA: 'right', // Social Science/Public Affairs
   EN2: 'left', // Engineering 2
+  LA1: 'right', // Liberal Arts 1
+  LA2: 'right', // Liberal Arts 2
+  LA3: 'right', // Liberal Arts 3
+  LA4: 'right', // Liberal Arts 4
+  LA5: 'right', // Liberal Arts 5
 };
 
 export interface CenterTarget {
@@ -41,12 +46,7 @@ interface MapProps {
   showParking?: boolean;
 }
 
-const PARKING_LAYER_IDS = [
-  'parking-areas-fill',
-  'parking-areas-outline',
-  'parking-areas',
-  'parking-areas-icon',
-];
+const PARKING_LAYER_IDS = ['parking-areas-fill', 'parking-areas-outline'];
 
 function pinUrl(b: BuildingWithRooms): string {
   return b.availableCount > 0 ? '/assets/pins/pin-green.png' : '/assets/pins/pin-red.png';
@@ -65,37 +65,49 @@ function isParkingOpenNow(lot: ParkingLot): boolean {
   return lot.type === 'student' || isEmployeeLotOpenToAll(new Date());
 }
 
-// Traced lots render as shaded shapes beneath the 3D buildings; lots with
-// `size` set (parking structures) render as circle badges above them, since
-// a structure's footprint would be hidden under its own building model.
+// Traced surface lots render as shaded shapes beneath the 3D buildings.
+// Structures (lots with `size`) and untraced lots are NOT in this source:
+// they render as DOM marker badges instead — canvas circles/symbols at
+// ground level get depth-occluded by the basemap's 3D buildings, which
+// would bury a structure's badge inside its own building model.
+function isBadgeLot(lot: ParkingLot): boolean {
+  return !lot.polygon || !!lot.size;
+}
+
 function parkingGeoJSON(): GeoJSON.FeatureCollection {
   return {
     type: 'FeatureCollection',
-    features: PARKING_LOTS.map((lot) => ({
+    features: PARKING_LOTS.filter((lot) => !isBadgeLot(lot)).map((lot) => ({
       type: 'Feature',
-      geometry: lot.polygon && !lot.size
-        ? // GeoJSON rings must be closed: repeat the first vertex at the end
-          { type: 'Polygon', coordinates: [[...lot.polygon, lot.polygon[0]]] }
-        : { type: 'Point', coordinates: [lot.longitude, lot.latitude] },
+      geometry: {
+        // GeoJSON rings must be closed: repeat the first vertex at the end
+        type: 'Polygon',
+        coordinates: [[...lot.polygon!, lot.polygon![0]]],
+      },
       properties: {
         name: lot.name,
         lotType: lot.type,
         open: isParkingOpenNow(lot),
-        size: lot.size ?? 1,
       },
     })),
   };
 }
 
+function applyParkingChipState(el: HTMLDivElement, lot: ParkingLot): void {
+  const open = isParkingOpenNow(lot);
+  el.classList.toggle('parking-chip-open', open);
+  el.classList.toggle('parking-chip-closed', !open);
+}
+
 function parkingPopupHtml(name: string, lotType: string, open: boolean): string {
   if (lotType === 'student') {
-    return `<div style="font-family:sans-serif;padding:2px 0">
+    return `<div style="padding:2px 0">
       <div style="font-weight:600;font-size:13px">${name}</div>
       <div style="font-size:12px;color:#1a9e3f;margin-top:2px">Student parking</div>
     </div>`;
   }
   if (open) {
-    return `<div style="font-family:sans-serif;padding:2px 0">
+    return `<div style="padding:2px 0">
       <div style="font-weight:600;font-size:13px">${name}</div>
       <div style="font-size:12px;color:#1a9e3f;margin-top:2px">You can park here now</div>
       <div style="font-size:11px;color:#6b7280;margin-top:2px;max-width:200px">
@@ -110,7 +122,7 @@ function parkingPopupHtml(name: string, lotType: string, open: boolean): string 
   const h = Math.floor(minutesUntilOpen / 60);
   const m = minutesUntilOpen % 60;
   const countdown = h > 0 ? `${h}h ${m}m` : `${m}m`;
-  return `<div style="font-family:sans-serif;padding:2px 0">
+  return `<div style="padding:2px 0">
     <div style="font-weight:600;font-size:13px">${name}</div>
     <div style="font-size:12px;color:#c9303a;margin-top:2px">
       Employee parking only.
@@ -122,7 +134,7 @@ function parkingPopupHtml(name: string, lotType: string, open: boolean): string 
 }
 
 function popupHtml(b: BuildingWithRooms): string {
-  return `<div style="font-family:sans-serif;padding:2px 0">
+  return `<div style="padding:2px 0">
     <div style="font-weight:600;font-size:13px">${b.name}</div>
     <div style="font-size:12px;color:#6b7280;margin-top:2px">
       ${b.isOpen ? `${b.availableCount}/${b.totalCount} rooms available` : 'Closed'}
@@ -153,10 +165,16 @@ export default function Map({
   useEffect(() => { buildingsRef.current = buildings; }, [buildings]);
   useEffect(() => { onBuildingClickRef.current = onBuildingClick; }, [onBuildingClick]);
 
-  // Toggle parking layers; the ref carries the initial value into the map's
-  // load handler for the first render
+  // Badge chips for structures/untraced lots (DOM markers, like the pins)
+  const parkingChips = useRef<{ el: HTMLDivElement; lot: ParkingLot }[]>([]);
+
+  // Toggle parking layers and badge chips; the ref carries the initial value
+  // into the map's load handler for the first render
   useEffect(() => {
     showParkingRef.current = showParking;
+    for (const { el } of parkingChips.current) {
+      el.style.display = showParking ? '' : 'none';
+    }
     const m = map.current;
     if (!m) return;
     const visibility = showParking ? 'visible' : 'none';
@@ -270,7 +288,37 @@ export default function Map({
     // Markers don't need the style to be loaded
     updateBuildingPins();
 
-    // Set once the style loads (parking renders as canvas layers, not markers)
+    // Structure/untraced-lot badges: DOM markers so the 3D buildings can't
+    // occlude them (same reason the building pins are DOM markers)
+    for (const lot of PARKING_LOTS) {
+      if (!isBadgeLot(lot)) continue;
+      const el = document.createElement('div');
+      el.className = 'parking-chip';
+      el.style.setProperty('--badge-scale', String(lot.size ?? 1));
+      el.textContent = 'P';
+      applyParkingChipState(el, lot);
+      if (!showParkingRef.current) el.style.display = 'none';
+      const showPopup = () => {
+        const m = map.current;
+        if (!m) return;
+        popup.current
+          ?.setLngLat([lot.longitude, lot.latitude])
+          .setHTML(parkingPopupHtml(lot.name, lot.type, isParkingOpenNow(lot)))
+          .addTo(m);
+      };
+      el.addEventListener('mouseenter', showPopup);
+      el.addEventListener('mouseleave', () => popup.current?.remove());
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        showPopup();
+      });
+      new mapboxgl.Marker({ element: el, anchor: 'center' })
+        .setLngLat([lot.longitude, lot.latitude])
+        .addTo(map.current);
+      parkingChips.current.push({ el, lot });
+    }
+
+    // Set once the style loads (the polygon layers need the style)
     let parkingTimer: number | undefined;
 
     // Dev-only coordinate picker, stripped from production builds.
@@ -281,6 +329,8 @@ export default function Map({
       // Mapbox's shift+drag box zoom captures shift+clicks before they reach
       // the click handler; disable it in dev so the polygon tracer works
       map.current.boxZoom.disable();
+      // Expose for debugging tools (scripts/map-debug.js)
+      (window as unknown as { __map?: mapboxgl.Map }).__map = map.current;
 
       // Feedback goes to a click-through HUD in the corner (a popup at the
       // click point would block the next vertex click)
@@ -387,47 +437,6 @@ export default function Map({
             'line-width': 1.5,
           },
         });
-        // Structures (and untraced lots): solid "P" badge above the 3D
-        // buildings, since a structure's footprint would be buried inside
-        // its own building model
-        m.addLayer({
-          id: 'parking-areas',
-          type: 'circle',
-          source: 'parking',
-          filter: ['==', ['geometry-type'], 'Point'],
-          paint: {
-            'circle-color': ['case', ['get', 'open'], '#1a9e3f', '#c9303a'],
-            'circle-opacity': 0.9,
-            'circle-stroke-color': '#ffffff',
-            'circle-stroke-opacity': 0.9,
-            'circle-stroke-width': 1.5,
-            'circle-radius': [
-              'interpolate', ['linear'], ['zoom'],
-              14, ['*', 3, ['get', 'size']],
-              16, ['*', 7, ['get', 'size']],
-              18, ['*', 14, ['get', 'size']],
-            ],
-          },
-        });
-        m.addLayer({
-          id: 'parking-areas-icon',
-          type: 'symbol',
-          source: 'parking',
-          filter: ['==', ['geometry-type'], 'Point'],
-          layout: {
-            'text-field': 'P',
-            'text-font': ['DIN Pro Bold', 'Arial Unicode MS Bold'],
-            'text-allow-overlap': true,
-            'text-size': [
-              'interpolate', ['linear'], ['zoom'],
-              14, ['*', 4, ['get', 'size']],
-              16, ['*', 8, ['get', 'size']],
-              18, ['*', 16, ['get', 'size']],
-            ],
-          },
-          paint: { 'text-color': '#ffffff' },
-        });
-
         // Respect the setting if it was off before the style finished loading
         if (!showParkingRef.current) {
           for (const id of PARKING_LAYER_IDS) m.setLayoutProperty(id, 'visibility', 'none');
@@ -444,21 +453,20 @@ export default function Map({
             .addTo(m);
         };
         // mouseenter covers desktop hover; click covers touch devices
-        for (const layerId of ['parking-areas', 'parking-areas-fill']) {
-          m.on('mouseenter', layerId, (e) => {
-            m.getCanvas().style.cursor = 'pointer';
-            showParkingPopup(e);
-          });
-          m.on('mouseleave', layerId, () => {
-            m.getCanvas().style.cursor = '';
-            popup.current?.remove();
-          });
-          m.on('click', layerId, showParkingPopup);
-        }
+        m.on('mouseenter', 'parking-areas-fill', (e) => {
+          m.getCanvas().style.cursor = 'pointer';
+          showParkingPopup(e);
+        });
+        m.on('mouseleave', 'parking-areas-fill', () => {
+          m.getCanvas().style.cursor = '';
+          popup.current?.remove();
+        });
+        m.on('click', 'parking-areas-fill', showParkingPopup);
 
         // Employee lots flip between restricted/open at 5:30 PM
         parkingTimer = window.setInterval(() => {
           (m.getSource('parking') as mapboxgl.GeoJSONSource | undefined)?.setData(parkingGeoJSON());
+          for (const { el, lot } of parkingChips.current) applyParkingChipState(el, lot);
         }, 60_000);
       }
 
@@ -475,6 +483,7 @@ export default function Map({
       map.current?.remove(); // also removes the markers
       map.current = null;
       markers.current = {};
+      parkingChips.current = [];
       onMapReadyCalled.current = false;
     };
   }, [onMapReady, updateBuildingPins]);
