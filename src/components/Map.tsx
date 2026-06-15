@@ -49,6 +49,9 @@ interface MapProps {
 const PARKING_LAYER_IDS = ['parking-areas-fill', 'parking-areas-outline'];
 
 function pinUrl(b: BuildingWithRooms): string {
+  // Closed (after hours / weekend) reads as a neutral gray orb, distinct from
+  // an open-but-full building (red).
+  if (!b.isOpen) return '/assets/pins/pin-gray.png';
   return b.availableCount > 0 ? '/assets/pins/pin-green.png' : '/assets/pins/pin-red.png';
 }
 
@@ -128,7 +131,7 @@ function parkingPopupHtml(name: string, lotType: string, open: boolean): string 
       Employee parking only.
     </div>
     <div style="font-size:11px;color:#6b7280;margin-top:2px;max-width:200px">
-      Employee parking lots open to students in ${countdown} (5:30 PM).
+      Open to students in ${countdown} (5:30 PM).
     </div>
   </div>`;
 }
@@ -294,7 +297,6 @@ export default function Map({
       if (!isBadgeLot(lot)) continue;
       const el = document.createElement('div');
       el.className = 'parking-chip';
-      el.style.setProperty('--badge-scale', String(lot.size ?? 1));
       el.textContent = 'P';
       applyParkingChipState(el, lot);
       if (!showParkingRef.current) el.style.display = 'none';
@@ -408,12 +410,16 @@ export default function Map({
       // student can park there right now, red when they can't. Canvas layer,
       // so they sit beneath the building pins instead of competing with them.
       if (!m.getSource('parking')) {
-        m.addSource('parking', { type: 'geojson', data: parkingGeoJSON() });
+        // promoteId lets feature-state key off the lot name so hover can firm
+        // up just the lot under the cursor.
+        m.addSource('parking', { type: 'geojson', data: parkingGeoJSON(), promoteId: 'name' });
         // Traced lots: shaded shape with an outline
         // The style imports the Mapbox Standard basemap, whose 3D buildings
         // live inside the import where beforeId can't reach. slot 'middle'
         // places these above roads but beneath the basemap's buildings, so
         // lots read as paint on the ground and buildings occlude them.
+        // Faint by default so they recede; the hovered lot firms up to full
+        // color via the 'hover' feature-state (set in the handlers below).
         m.addLayer({
           id: 'parking-areas-fill',
           type: 'fill',
@@ -422,7 +428,7 @@ export default function Map({
           filter: ['==', ['geometry-type'], 'Polygon'],
           paint: {
             'fill-color': ['case', ['get', 'open'], '#22a04a', '#d23b44'],
-            'fill-opacity': 0.25,
+            'fill-opacity': ['case', ['boolean', ['feature-state', 'hover'], false], 0.3, 0.1],
           },
         });
         m.addLayer({
@@ -433,7 +439,7 @@ export default function Map({
           filter: ['==', ['geometry-type'], 'Polygon'],
           paint: {
             'line-color': ['case', ['get', 'open'], '#1a9e3f', '#c9303a'],
-            'line-opacity': 0.7,
+            'line-opacity': ['case', ['boolean', ['feature-state', 'hover'], false], 0.9, 0.4],
             'line-width': 1.5,
           },
         });
@@ -452,13 +458,30 @@ export default function Map({
             .setHTML(parkingPopupHtml(p.name, p.lotType, open))
             .addTo(m);
         };
-        // mouseenter covers desktop hover; click covers touch devices
-        m.on('mouseenter', 'parking-areas-fill', (e) => {
+        // Track the lot under the cursor so only it firms up. mousemove (not
+        // mouseenter) keeps the hovered feature current as the pointer slides
+        // between adjacent lots; click covers touch devices.
+        let hoveredLot: string | number | null = null;
+        const setHover = (id: string | number | null) => {
+          if (hoveredLot === id) return;
+          if (hoveredLot !== null) {
+            m.setFeatureState({ source: 'parking', id: hoveredLot }, { hover: false });
+          }
+          hoveredLot = id;
+          if (id !== null) {
+            m.setFeatureState({ source: 'parking', id }, { hover: true });
+          }
+        };
+        m.on('mousemove', 'parking-areas-fill', (e) => {
+          const f = e.features?.[0];
+          if (f?.id == null) return;
           m.getCanvas().style.cursor = 'pointer';
+          setHover(f.id);
           showParkingPopup(e);
         });
         m.on('mouseleave', 'parking-areas-fill', () => {
           m.getCanvas().style.cursor = '';
+          setHover(null);
           popup.current?.remove();
         });
         m.on('click', 'parking-areas-fill', showParkingPopup);

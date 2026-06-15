@@ -86,7 +86,22 @@ function CountdownChip({ minutes }: { minutes: number }) {
   );
 }
 
-function CountBadge({ available, total }: { available: number; total: number }) {
+function CountBadge({
+  available,
+  total,
+  closed,
+}: {
+  available: number;
+  total: number;
+  closed: boolean;
+}) {
+  if (closed) {
+    return (
+      <span className="min-w-[37px] text-center rounded-full border border-[#d4d4d8] bg-[#f4f4f5] px-2 py-0.5 text-[10px] font-semibold text-[#6b7280]">
+        Closed
+      </span>
+    );
+  }
   const has = available > 0;
   const cls = has
     ? 'bg-[#e6f9ec] border-[#7ee8a0] text-[#1a9e3f]'
@@ -97,6 +112,57 @@ function CountBadge({ available, total }: { available: number; total: number }) 
     >
       {available}/{total}
     </span>
+  );
+}
+
+const DAY_NAMES = [
+  'Sunday',
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+];
+
+// Next time a closed building opens. Buildings open on weekdays at
+// weekday_open and are closed evenings/weekends, so we walk forward from now
+// to the first upcoming weekday opening. Uses local time, matching the rest of
+// the client (campus is Pacific; users browse on-campus).
+function nextOpening(
+  building: BuildingWithRooms
+): { dayLabel: string; timeLabel: string } | null {
+  if (!building.weekday_open) return null;
+  const [h, m] = building.weekday_open.split(':').map(Number);
+  const now = new Date();
+  for (let offset = 0; offset <= 7; offset++) {
+    const d = new Date(now);
+    d.setDate(now.getDate() + offset);
+    const day = d.getDay();
+    if (day === 0 || day === 6) continue; // closed on weekends
+    d.setHours(h, m, 0, 0);
+    if (d > now) {
+      const dayLabel = offset === 0 ? 'today' : offset === 1 ? 'tomorrow' : DAY_NAMES[day];
+      const ampm = h >= 12 ? 'PM' : 'AM';
+      const timeLabel = `${h % 12 || 12}:${String(m).padStart(2, '0')} ${ampm}`;
+      return { dayLabel, timeLabel };
+    }
+  }
+  return null;
+}
+
+function ClosedPanel({ building }: { building: BuildingWithRooms }) {
+  const opening = nextOpening(building);
+  return (
+    <div className="px-1 pb-3 pt-1">
+      <p className="text-[13px] font-medium text-foreground/80">Building is closed</p>
+      {opening && (
+        <p className="mt-0.5 text-[13px] text-muted-foreground">
+          Opens <span className="font-bold">{opening.dayLabel}</span> at{' '}
+          <span className="font-bold">{opening.timeLabel}</span>
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -304,7 +370,7 @@ function BuildingItem({
         >
           <span className="ml-1 truncate text-sm font-semibold text-foreground/85">{building.name}</span>
           <div className="flex shrink-0 items-center gap-2 pl-2">
-            <CountBadge available={available.length} total={totalVisible} />
+            <CountBadge available={available.length} total={totalVisible} closed={!building.isOpen} />
             {expanded ? (
               <ChevronUp className="h-3.5 w-3.5 text-foreground/70" />
             ) : (
@@ -314,7 +380,9 @@ function BuildingItem({
         </button>
       </div>
 
-      {expanded && (
+      {expanded && !building.isOpen && <ClosedPanel building={building} />}
+
+      {expanded && building.isOpen && (
         <div className="pb-1">
           {available.length > 0 && (
             <>

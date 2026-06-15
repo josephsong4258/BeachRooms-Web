@@ -87,6 +87,8 @@
   width: var(--pin-size, 24px);
   height: var(--pin-size, 24px);
   cursor: pointer;
+  /* Sit above the parking chips, which recede behind the pins */
+  z-index: 2;
 }
 
 .building-marker img {
@@ -115,33 +117,41 @@
   pointer-events: none;
 }
 
-/* Parking badges ("P" in a circle) for structures and untraced lots.
-   DOM markers like the building pins, so 3D buildings can't occlude them.
-   Same palette as the sidebar count pills. */
+/* Quiet "P" markers (structures and untraced lots) that recede behind the
+   building pins. DOM markers like the pins, so 3D buildings can't occlude them.
+   ~66% of a pin, translucent outline at rest; color firms up on hover. */
 .parking-chip {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: calc(var(--pin-size, 24px) * 0.85 * var(--badge-scale, 1));
-  height: calc(var(--pin-size, 24px) * 0.85 * var(--badge-scale, 1));
+  width: calc(var(--pin-size, 24px) * 0.66);
+  height: calc(var(--pin-size, 24px) * 0.66);
   border-radius: 50%;
-  font-size: calc(var(--pin-font, 11px) * 1.05 * var(--badge-scale, 1));
-  font-weight: 700;
+  font-size: calc(var(--pin-font, 11px) * 0.85);
+  font-weight: 600;
   line-height: 1;
-  border: 1.5px solid;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  border: 1px solid;
+  opacity: 0.5;
+  z-index: 1;
+  transition: opacity 150ms ease-out, box-shadow 150ms ease-out;
   cursor: pointer;
 }
 
+.parking-chip:hover {
+  opacity: 1;
+  z-index: 5;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+
 .parking-chip-open {
-  background: #e6f9ec;
-  border-color: #7ee8a0;
+  background: color-mix(in srgb, #e6f9ec 70%, transparent); /* --status-open-bg */
+  border-color: #1a9e3f; /* --status-open-fg */
   color: #1a9e3f;
 }
 
 .parking-chip-closed {
-  background: #fde8ea;
-  border-color: #f5a3ab;
+  background: color-mix(in srgb, #fde8ea 70%, transparent); /* --status-occupied-bg */
+  border-color: #c9303a; /* --status-occupied-fg */
   color: #c9303a;
 }
 

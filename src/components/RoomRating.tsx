@@ -1,6 +1,6 @@
 'use client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ThumbsUp, ThumbsDown } from 'lucide-react';
+import RatingPills from '@/components/RatingPills';
 import { supabase } from '@/lib/supabase';
 import { useUser } from '@/lib/use-auth';
 
@@ -73,6 +73,8 @@ export default function RoomRating({ roomId, onRequireSignIn }: RoomRatingProps)
     onSettled: () => queryClient.invalidateQueries({ queryKey }),
   });
 
+  // The pressed pill's value comes straight through; the mutation interprets
+  // "same value again" as clearing the vote.
   function handleVote(isPositive: boolean) {
     if (!user) {
       onRequireSignIn();
@@ -81,40 +83,7 @@ export default function RoomRating({ roomId, onRequireSignIn }: RoomRatingProps)
     vote.mutate(isPositive);
   }
 
-  const pillBase =
-    'flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors';
-
   return (
-    <div className="flex items-center justify-between gap-3 rounded-lg bg-muted/50 px-4 py-3">
-      <p className="text-sm font-medium">Was the room free?</p>
-      <div className="flex shrink-0 gap-1.5">
-        <button
-          onClick={() => handleVote(true)}
-          aria-label="Thumbs up"
-          aria-pressed={myVote === true}
-          className={`${pillBase} ${
-            myVote === true
-              ? 'border-[#7ee8a0] bg-[#e6f9ec] text-[#1a9e3f]'
-              : 'border-border text-muted-foreground hover:bg-accent/40'
-          }`}
-        >
-          <ThumbsUp className="h-3.5 w-3.5" />
-          {upCount}
-        </button>
-        <button
-          onClick={() => handleVote(false)}
-          aria-label="Thumbs down"
-          aria-pressed={myVote === false}
-          className={`${pillBase} ${
-            myVote === false
-              ? 'border-[#f5a3ab] bg-[#fde8ea] text-[#c9303a]'
-              : 'border-border text-muted-foreground hover:bg-accent/40'
-          }`}
-        >
-          <ThumbsDown className="h-3.5 w-3.5" />
-          {downCount}
-        </button>
-      </div>
-    </div>
+    <RatingPills up={upCount} down={downCount} vote={myVote} onVote={handleVote} />
   );
 }
