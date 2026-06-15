@@ -97,6 +97,12 @@
   height: 100%;
 }
 
+/* Popups must clear every marker (pins z-index 2, parking chips up to 5 on
+   hover), otherwise neighboring pins paint over the hover popup. */
+.mapboxgl-popup {
+  z-index: 10;
+}
+
 .building-marker-label {
   position: absolute;
   top: 100%;
