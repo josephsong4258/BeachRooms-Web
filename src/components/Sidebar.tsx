@@ -1,20 +1,27 @@
 'use client';
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import Image from 'next/image';
-import { Search, X, Calendar, RotateCcw } from 'lucide-react';
+import { Search, X, Calendar, RotateCcw, ChevronRight, BookOpen } from 'lucide-react';
 import Fuse from 'fuse.js';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import BuildingAccordion from '@/components/BuildingAccordion';
+import BuildingList from '@/components/BuildingList';
+import BuildingDetail from '@/components/BuildingDetail';
+import ParkingDetail from '@/components/ParkingDetail';
+import LibraryDetail from '@/components/LibraryDetail';
+import LibraryFloorDetail from '@/components/LibraryFloorDetail';
 import RoomDetail from '@/components/RoomDetail';
+import { PARKING_LOTS } from '@/data/parking';
+import { LIBRARY, isLibraryOpen } from '@/data/library';
 import SettingsMenu, { type AppSettings } from '@/components/SettingsMenu';
 import FilterMenu, { EMPTY_FILTERS, type RoomFilters } from '@/components/FilterMenu';
 import SignInDialog from '@/components/SignInDialog';
 import { useFavorites } from '@/lib/use-favorites';
 import { formatTimeDisplay } from '@/lib/time-utils';
+import { effectiveHours } from '@/lib/building-hours';
 import type { BuildingWithRooms, RoomAvailability } from '@/types';
 
 function parseMinutes(t: string): number {
@@ -22,17 +29,19 @@ function parseMinutes(t: string): number {
   return h * 60 + m;
 }
 
-// A room is "free during" a window if the building is open for the whole
-// window and no class overlaps it.
+// A room is "free during" a window if the building is open (for refDate's day,
+// folding in any hours override) for the whole window and no class overlaps it.
 function isRoomFreeDuring(
   room: RoomAvailability,
   building: BuildingWithRooms,
   startMin: number,
-  endMin: number
+  endMin: number,
+  refDate: Date
 ): boolean {
-  if (!building.weekday_open || !building.weekday_close) return false;
-  if (startMin < parseMinutes(building.weekday_open)) return false;
-  if (endMin > parseMinutes(building.weekday_close)) return false;
+  const hours = effectiveHours(building.code, building.weekday_open, building.weekday_close, refDate);
+  if (!hours) return false;
+  if (startMin < parseMinutes(hours.open)) return false;
+  if (endMin > parseMinutes(hours.close)) return false;
   return !room.todaySchedules.some(
     (s) => parseMinutes(s.start_time) < endMin && parseMinutes(s.end_time) > startMin
   );
@@ -43,8 +52,18 @@ interface SidebarProps {
   isFetching: boolean;
   selectedDateTime: Date | null;
   onDateTimeChange: (dt: Date | null) => void;
-  expandedItems: string[];
-  onToggleItem: (id: string) => void;
+  // Which building page is open (null = list). Lives in page.tsx so map-marker
+  // taps can open it too.
+  viewBuildingId: string | null;
+  onOpenBuilding: (building: BuildingWithRooms) => void;
+  onCloseBuilding: () => void;
+  // Which parking-lot page is open (null = none); opened from map clicks.
+  viewParkingId: string | null;
+  onCloseParking: () => void;
+  // Library overview page (opened from the map pin or the list entry).
+  viewLibrary: boolean;
+  onOpenLibrary: () => void;
+  onCloseLibrary: () => void;
   isMobile: boolean;
   settings: AppSettings;
   onSettingsChange: (patch: Partial<AppSettings>) => void;
@@ -55,8 +74,14 @@ export default function Sidebar({
   isFetching,
   selectedDateTime,
   onDateTimeChange,
-  expandedItems,
-  onToggleItem,
+  viewBuildingId,
+  onOpenBuilding,
+  onCloseBuilding,
+  viewParkingId,
+  onCloseParking,
+  viewLibrary,
+  onOpenLibrary,
+  onCloseLibrary,
   isMobile,
   settings,
   onSettingsChange,
@@ -69,6 +94,11 @@ export default function Sidebar({
   const [pickerDate, setPickerDate] = useState('');
   const [pickerTime, setPickerTime] = useState('');
   const [showSignIn, setShowSignIn] = useState(false);
+  // Which library floor sub-page is open; reset whenever the library closes.
+  const [libraryFloorId, setLibraryFloorId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!viewLibrary) setLibraryFloorId(null);
+  }, [viewLibrary]);
 
   const {
     signedIn,
@@ -93,6 +123,7 @@ export default function Sidebar({
     const hasWindow = startTime !== null || minDurationHours !== null;
     if (!groupStudyOnly && !hasWindow) return buildings;
 
+    const refDate = selectedDateTime ?? new Date();
     let windowStartMin = 0;
     let windowEndMin = 0;
     if (hasWindow) {
@@ -100,8 +131,7 @@ export default function Sidebar({
         const [h, m] = startTime.split(':').map(Number);
         windowStartMin = h * 60 + m;
       } else {
-        const ref = selectedDateTime ?? new Date();
-        windowStartMin = ref.getHours() * 60 + ref.getMinutes();
+        windowStartMin = refDate.getHours() * 60 + refDate.getMinutes();
       }
       // No duration selected = just "free at that time"
       windowEndMin = windowStartMin + Math.max((minDurationHours ?? 0) * 60, 1);
@@ -112,7 +142,7 @@ export default function Sidebar({
         let rooms = b.rooms;
         if (groupStudyOnly) rooms = rooms.filter((r) => r.is_alc);
         if (hasWindow) {
-          rooms = rooms.filter((r) => isRoomFreeDuring(r, b, windowStartMin, windowEndMin));
+          rooms = rooms.filter((r) => isRoomFreeDuring(r, b, windowStartMin, windowEndMin, refDate));
         }
         return {
           ...b,
@@ -161,6 +191,12 @@ export default function Sidebar({
 
   const isCustomTime = selectedDateTime !== null;
 
+  // Show the library entry unless a search is active that the library doesn't
+  // match. Group-study filter also hides it (it has no scraped rooms).
+  const libQuery = searchQuery.trim().toLowerCase();
+  const showLibraryRow =
+    !filters.groupStudyOnly && (libQuery === '' || 'university library'.includes(libQuery));
+
   function openDatePicker() {
     const now = selectedDateTime ?? new Date();
     const y = now.getFullYear();
@@ -204,12 +240,60 @@ export default function Sidebar({
     </div>
   );
 
+  // Library overview, and its floor sub-pages (floor first so back from a floor
+  // returns to the library overview).
+  if (viewLibrary) {
+    const floor = libraryFloorId
+      ? LIBRARY.floors.find((f) => f.id === libraryFloorId) ?? null
+      : null;
+    if (floor) {
+      return <LibraryFloorDetail floor={floor} onBack={() => setLibraryFloorId(null)} />;
+    }
+    return <LibraryDetail onBack={onCloseLibrary} onOpenFloor={setLibraryFloorId} />;
+  }
+
+  // Parking takes over the sidebar when a lot is opened from the map, even if a
+  // room/building page is underneath; backing out reveals whatever was there.
+  const viewParking = viewParkingId
+    ? PARKING_LOTS.find((l) => l.id === viewParkingId) ?? null
+    : null;
+  if (viewParking) {
+    return <ParkingDetail lot={viewParking} onBack={onCloseParking} />;
+  }
+
+  // Order matters: the room check comes first, so drilling list → building →
+  // room shows the room, and backing out of the room falls through to the
+  // still-open building page below.
   if (selectedRoom && selectedBuilding) {
     return (
       <RoomDetail
         room={selectedRoom}
         building={selectedBuilding}
         onBack={() => { setSelectedRoom(null); setSelectedBuilding(null); }}
+      />
+    );
+  }
+
+  // Resolve from the live `buildings` prop (not the filtered list) so the page
+  // shows every room and stays fresh across refetches.
+  const viewBuilding = viewBuildingId
+    ? buildings.find((b) => b.id === viewBuildingId) ?? null
+    : null;
+
+  if (viewBuilding) {
+    return (
+      <BuildingDetail
+        building={viewBuilding}
+        onBack={onCloseBuilding}
+        onRoomClick={(room, building) => {
+          setSelectedRoom(room);
+          setSelectedBuilding(building);
+          // viewBuilding stays set → backing out of the room returns here
+        }}
+        favoriteRoomIds={favoriteRoomIds}
+        onToggleFavoriteRoom={handleToggleFavoriteRoom}
+        favoriteBuildingIds={favoriteBuildingIds}
+        onToggleFavoriteBuilding={handleToggleFavoriteBuilding}
       />
     );
   }
@@ -287,13 +371,35 @@ export default function Sidebar({
         )}
         <ScrollArea className="h-full">
           <div className="px-2 py-2">
-            {filteredBuildings.length === 0 && !isFetching ? (
-              <p className="text-center text-sm text-muted-foreground py-8">No results found</p>
-            ) : (
-              <BuildingAccordion
+            {showLibraryRow && (
+              <button
+                onClick={onOpenLibrary}
+                className="flex w-full items-center gap-2.5 border-b border-border/60 py-2 pr-1 text-left transition-colors hover:bg-accent/40"
+              >
+                <span className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-[#eef2ff] text-[#4f46e5]">
+                  <BookOpen className="h-3.5 w-3.5" />
+                </span>
+                <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground/85">
+                  {LIBRARY.name}
+                </span>
+                <span className="flex shrink-0 items-center gap-2 pl-2">
+                  <span
+                    className={`min-w-[37px] rounded-full border px-2 py-0.5 text-center text-[10px] font-semibold ${
+                      isLibraryOpen()
+                        ? 'border-[#7ee8a0] bg-[#e6f9ec] text-[#1a9e3f]'
+                        : 'border-[#d4d4d8] bg-[#f4f4f5] text-[#6b7280]'
+                    }`}
+                  >
+                    {isLibraryOpen() ? 'Open' : 'Closed'}
+                  </span>
+                  <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/60" />
+                </span>
+              </button>
+            )}
+            {filteredBuildings.length > 0 ? (
+              <BuildingList
                 buildings={filteredBuildings}
-                expandedItems={expandedItems}
-                onToggle={onToggleItem}
+                onOpenBuilding={onOpenBuilding}
                 onRoomClick={(room, building) => {
                   setSelectedRoom(room);
                   setSelectedBuilding(building);
@@ -305,6 +411,11 @@ export default function Sidebar({
                 onToggleFavoriteBuilding={handleToggleFavoriteBuilding}
                 showFavorites={searchQuery.trim() === ''}
               />
+            ) : (
+              !isFetching &&
+              !showLibraryRow && (
+                <p className="text-center text-sm text-muted-foreground py-8">No results found</p>
+              )
             )}
           </div>
         </ScrollArea>

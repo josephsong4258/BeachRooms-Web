@@ -97,7 +97,7 @@ export default function SettingsMenu({ settings, onChange }: SettingsMenuProps) 
           />
           <SettingRow
             label="Auto-center building"
-            help="When you expand a building in the list, the map automatically centers on it."
+            help="When you open a building from the list, the map automatically centers on it."
             checked={settings.autoCenter}
             onCheckedChange={(v) => onChange({ autoCenter: v })}
           />

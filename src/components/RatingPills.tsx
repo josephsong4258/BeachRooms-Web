@@ -9,6 +9,8 @@ interface RatingPillsProps {
   /** Called with the pressed pill's value. Re-clicking the active vote should
       clear it — handle that here, e.g. onVote={(pos) => set(v => v === pos ? null : pos)} */
   onVote: (positive: boolean) => void;
+  /** Prompt shown beside the pills. */
+  question?: string;
 }
 
 const pillBase =
@@ -17,10 +19,16 @@ const pillBase =
 
 // Controlled "Was the room free?" crowdsourcing bar. The active vote highlights
 // its pill in the matching status color; the rest stays muted.
-export default function RatingPills({ up, down, vote, onVote }: RatingPillsProps) {
+export default function RatingPills({
+  up,
+  down,
+  vote,
+  onVote,
+  question = 'Was the room free?',
+}: RatingPillsProps) {
   return (
     <div className="flex items-center justify-between gap-3 rounded-lg bg-muted/50 px-4 py-3">
-      <p className="text-sm font-medium">Was the room free?</p>
+      <p className="text-sm font-medium">{question}</p>
       <div className="flex shrink-0 gap-1.5">
         <button
           onClick={() => onVote(true)}

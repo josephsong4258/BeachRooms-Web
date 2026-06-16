@@ -2,7 +2,8 @@
 import { useCallback, useEffect, useRef } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
-import { PARKING_LOTS, type ParkingLot } from '@/data/parking';
+import { PARKING_LOTS, isParkingOpenNow, type ParkingLot } from '@/data/parking';
+import { LIBRARY, isLibraryOpen } from '@/data/library';
 import type { BuildingWithRooms } from '@/types';
 
 const CSULB_CENTER: [number, number] = [-118.113603, 33.778675];
@@ -41,6 +42,8 @@ export interface CenterTarget {
 interface MapProps {
   buildings: BuildingWithRooms[];
   onBuildingClick: (buildingId: string) => void;
+  onParkingClick: (lotId: string) => void;
+  onLibraryClick: () => void;
   onMapReady: () => void;
   centerTarget?: CenterTarget | null;
   showParking?: boolean;
@@ -53,19 +56,6 @@ function pinUrl(b: BuildingWithRooms): string {
   // an open-but-full building (red).
   if (!b.isOpen) return '/assets/pins/pin-gray.png';
   return b.availableCount > 0 ? '/assets/pins/pin-green.png' : '/assets/pins/pin-red.png';
-}
-
-// Employee lots allow general parking weekdays after 5:30 PM and all day
-// Saturday and Sunday.
-function isEmployeeLotOpenToAll(d: Date): boolean {
-  const day = d.getDay();
-  if (day === 0 || day === 6) return true;
-  return d.getHours() > 17 || (d.getHours() === 17 && d.getMinutes() >= 30);
-}
-
-// Green = student can park right now, red = they can't
-function isParkingOpenNow(lot: ParkingLot): boolean {
-  return lot.type === 'student' || isEmployeeLotOpenToAll(new Date());
 }
 
 // Traced surface lots render as shaded shapes beneath the 3D buildings.
@@ -88,6 +78,7 @@ function parkingGeoJSON(): GeoJSON.FeatureCollection {
         coordinates: [[...lot.polygon!, lot.polygon![0]]],
       },
       properties: {
+        id: lot.id,
         name: lot.name,
         lotType: lot.type,
         open: isParkingOpenNow(lot),
@@ -145,9 +136,21 @@ function popupHtml(b: BuildingWithRooms): string {
   </div>`;
 }
 
+function libraryPopupHtml(): string {
+  const open = isLibraryOpen();
+  return `<div style="padding:2px 0">
+    <div style="font-weight:600;font-size:13px">${LIBRARY.name}</div>
+    <div style="font-size:12px;color:${open ? '#1a9e3f' : '#6b7280'};margin-top:2px">
+      ${open ? 'Open' : 'Closed'}
+    </div>
+  </div>`;
+}
+
 export default function Map({
   buildings,
   onBuildingClick,
+  onParkingClick,
+  onLibraryClick,
   onMapReady,
   centerTarget,
   showParking = true,
@@ -164,9 +167,13 @@ export default function Map({
   // handlers always see the latest values without us re-registering them.
   const buildingsRef = useRef(buildings);
   const onBuildingClickRef = useRef(onBuildingClick);
+  const onParkingClickRef = useRef(onParkingClick);
+  const onLibraryClickRef = useRef(onLibraryClick);
   const showParkingRef = useRef(showParking);
   useEffect(() => { buildingsRef.current = buildings; }, [buildings]);
   useEffect(() => { onBuildingClickRef.current = onBuildingClick; }, [onBuildingClick]);
+  useEffect(() => { onParkingClickRef.current = onParkingClick; }, [onParkingClick]);
+  useEffect(() => { onLibraryClickRef.current = onLibraryClick; }, [onLibraryClick]);
 
   // Badge chips for structures/untraced lots (DOM markers, like the pins)
   const parkingChips = useRef<{ el: HTMLDivElement; lot: ParkingLot }[]>([]);
@@ -291,6 +298,34 @@ export default function Map({
     // Markers don't need the style to be loaded
     updateBuildingPins();
 
+    // Library — a single static DOM marker (it isn't a scraped building, so it
+    // lives outside updateBuildingPins). Green when open, gray when closed.
+    {
+      const libEl = document.createElement('div');
+      libEl.className = 'building-marker';
+      const libImg = document.createElement('img');
+      libImg.alt = '';
+      libImg.draggable = false;
+      libImg.src = isLibraryOpen() ? '/assets/pins/pin-green.png' : '/assets/pins/pin-gray.png';
+      const libLabel = document.createElement('div');
+      libLabel.className = 'building-marker-label';
+      libLabel.textContent = 'Library';
+      libEl.append(libImg, libLabel);
+      libEl.addEventListener('mouseenter', () => {
+        const m = map.current;
+        if (m) popup.current?.setLngLat([LIBRARY.longitude, LIBRARY.latitude]).setHTML(libraryPopupHtml()).addTo(m);
+      });
+      libEl.addEventListener('mouseleave', () => popup.current?.remove());
+      libEl.addEventListener('click', (e) => {
+        e.stopPropagation();
+        popup.current?.remove();
+        onLibraryClickRef.current();
+      });
+      new mapboxgl.Marker({ element: libEl, anchor: 'center' })
+        .setLngLat([LIBRARY.longitude, LIBRARY.latitude])
+        .addTo(map.current);
+    }
+
     // Structure/untraced-lot badges: DOM markers so the 3D buildings can't
     // occlude them (same reason the building pins are DOM markers)
     for (const lot of PARKING_LOTS) {
@@ -310,9 +345,11 @@ export default function Map({
       };
       el.addEventListener('mouseenter', showPopup);
       el.addEventListener('mouseleave', () => popup.current?.remove());
+      // Click opens the lot's page (with photo + ratings/comments)
       el.addEventListener('click', (e) => {
         e.stopPropagation();
-        showPopup();
+        popup.current?.remove();
+        onParkingClickRef.current(lot.id);
       });
       new mapboxgl.Marker({ element: el, anchor: 'center' })
         .setLngLat([lot.longitude, lot.latitude])
@@ -484,7 +521,15 @@ export default function Map({
           setHover(null);
           popup.current?.remove();
         });
-        m.on('click', 'parking-areas-fill', showParkingPopup);
+        // Click a lot opens its page (photo + ratings/comments)
+        m.on('click', 'parking-areas-fill', (e) => {
+          const f = e.features?.[0];
+          const id = f?.properties?.id;
+          if (typeof id === 'string') {
+            popup.current?.remove();
+            onParkingClickRef.current(id);
+          }
+        });
 
         // Employee lots flip between restricted/open at 5:30 PM
         parkingTimer = window.setInterval(() => {

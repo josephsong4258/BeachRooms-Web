@@ -13,6 +13,9 @@ export interface Building {
   saturday_close: string | null;
   sunday_open: string | null;
   sunday_close: string | null;
+  // Optional exterior photo for the building page. Column may not exist yet —
+  // the building page falls back to a placeholder when it's null.
+  image_url?: string | null;
 }
 
 export interface Classroom {
@@ -78,6 +81,8 @@ export interface BuildingWithRooms {
   longitude: number;
   weekday_open: string | null;
   weekday_close: string | null;
+  // Exterior photo for the building page; null falls back to a placeholder.
+  imageUrl: string | null;
   isOpen: boolean;
   availableCount: number;
   totalCount: number;

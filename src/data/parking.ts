@@ -27,6 +27,19 @@ export interface ParkingLot {
   size?: number;
 }
 
+// Employee lots allow general (student) parking on weekdays after 5:30 PM and
+// all day Saturday and Sunday.
+export function isEmployeeLotOpenToAll(d: Date = new Date()): boolean {
+  const day = d.getDay();
+  if (day === 0 || day === 6) return true;
+  return d.getHours() > 17 || (d.getHours() === 17 && d.getMinutes() >= 30);
+}
+
+// True when a student can park in this lot right now.
+export function isParkingOpenNow(lot: ParkingLot, d: Date = new Date()): boolean {
+  return lot.type === 'student' || isEmployeeLotOpenToAll(d);
+}
+
 export const PARKING_LOTS: ParkingLot[] = [
   { id: 'pv-north', name: 'Palo Verde North Structure', type: 'student', latitude: 33.787595, longitude: -118.109284, size: .5, polygon: [[-118.109841, 33.786912], [-118.109783, 33.786906], [-118.109776, 33.786833], [-118.108933, 33.786844], [-118.108927, 33.786915], [-118.108866, 33.78692], [-118.108861, 33.787914], [-118.108907, 33.787919], [-118.108915, 33.787959], [-118.109764, 33.787965], [-118.109758, 33.787922], [-118.109828, 33.787926]]},
   { id: 'pv-south', name: 'Palo Verde South Structure', type: 'student',latitude: 33.786418, longitude: -118.109366,  size: .5, polygon: [[-118.109801, 33.786619], [-118.109933, 33.786622], [-118.109933, 33.785643], [-118.109864, 33.785637], [-118.109858, 33.785583], [-118.109021, 33.785599], [-118.109021, 33.785645], [-118.10895, 33.785649], [-118.108951, 33.78663], [-118.109018, 33.786645], [-118.109017, 33.786687]]},

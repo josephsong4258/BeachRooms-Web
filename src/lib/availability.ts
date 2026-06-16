@@ -4,6 +4,7 @@ import type {
   ClassroomAvailability,
   AvailabilityStatus,
 } from '@/types';
+import { effectiveHours } from '@/lib/building-hours';
 
 // All math in this module uses local-time Date methods (getDay/setHours), so
 // "now" must be campus wall-clock time. The server's own timezone can't be
@@ -31,21 +32,16 @@ export function isBuildingOpen(
   building: ClassroomWithBuilding['building'],
   now: Date = new Date()
 ): { isOpen: boolean; opensAt: Date | null; closesAt: Date | null } {
-  const dayOfWeek = now.getDay();
+  // Effective hours fold in any per-building override (e.g. Horn Center's
+  // summer Mon–Thu 8–5 / closed-Friday schedule) and the weekend default.
+  const hours = effectiveHours(building.code, building.weekday_open, building.weekday_close, now);
 
-  if (dayOfWeek === 0 || dayOfWeek === 6) {
+  if (!hours) {
     return { isOpen: false, opensAt: null, closesAt: null };
   }
 
-  const openTime = building.weekday_open;
-  const closeTime = building.weekday_close;
-
-  if (!openTime || !closeTime) {
-    return { isOpen: false, opensAt: null, closesAt: null };
-  }
-
-  const opensAt = parseTimeToday(openTime, now);
-  const closesAt = parseTimeToday(closeTime, now);
+  const opensAt = parseTimeToday(hours.open, now);
+  const closesAt = parseTimeToday(hours.close, now);
   const isOpen = now >= opensAt && now <= closesAt;
 
   return { isOpen, opensAt, closesAt };
@@ -147,7 +143,9 @@ export function calculateAvailability(
       currentClassEndsAt: null,
       minutesUntilNextClass: null,
       availableDurationMinutes: null,
-      statusText: isWeekend ? 'Closed on weekends' : 'No classes today',
+      // Reached only when the building has no hours today (closed), so this is
+      // a closure, not an open-but-class-free day.
+      statusText: isWeekend ? 'Closed on weekends' : 'Building closed',
       distanceMiles: null,
       todaySchedules: schedules,
     };

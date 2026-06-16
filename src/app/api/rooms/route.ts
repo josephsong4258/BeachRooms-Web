@@ -133,6 +133,7 @@ export async function GET(request: NextRequest) {
         longitude: building.longitude,
         weekday_open: building.weekday_open,
         weekday_close: building.weekday_close,
+        imageUrl: building.image_url ?? null,
         isOpen: avail.isBuildingOpen,
         availableCount: 0,
         totalCount: 0,

@@ -10,7 +10,7 @@ import LoadingScreen from '@/components/LoadingScreen';
 import { formatDateTimeParam } from '@/lib/time-utils';
 import type { AppSettings } from '@/components/SettingsMenu';
 import type { CenterTarget } from '@/components/Map';
-import type { APIResponse } from '@/types';
+import type { APIResponse, BuildingWithRooms } from '@/types';
 
 const CampusMap = dynamic(() => import('@/components/Map'), { ssr: false });
 
@@ -32,7 +32,13 @@ async function fetchRooms(selectedDateTime: Date | null): Promise<APIResponse> {
 
 export default function Home() {
   const [selectedDateTime, setSelectedDateTime] = useState<Date | null>(null);
-  const [expandedItems, setExpandedItems] = useState<string[]>([]);
+  // Which building page is open (null = list). Lifted here so map-marker taps
+  // can open it the same way list rows do.
+  const [viewBuildingId, setViewBuildingId] = useState<string | null>(null);
+  // Which parking-lot page is open (null = none); opened from map clicks.
+  const [viewParkingId, setViewParkingId] = useState<string | null>(null);
+  // Whether the library overview page is open (opened from the map or the list).
+  const [viewLibrary, setViewLibrary] = useState(false);
   const [showMap, setShowMap] = useState(true);
   const [darkMode, setDarkMode] = useState(false);
   const [autoCenter, setAutoCenter] = useState(true);
@@ -82,26 +88,43 @@ export default function Home() {
 
   const handleMapReady = useCallback(() => setMapReady(true), []);
 
-  const handleToggleItem = useCallback((id: string) => {
-    const isExpanding = !expandedItems.includes(id);
-    if (isExpanding && autoCenter) {
-      const b = buildings.find((x) => x.id === id);
-      if (b?.latitude && b?.longitude) {
-        setCenterTarget({ lng: b.longitude, lat: b.latitude, key: Date.now() });
-      }
+  // Opening a building from the list optionally centers the map on it.
+  // Opening any detail clears the others so they don't stack in the sidebar.
+  const handleOpenBuilding = useCallback((building: BuildingWithRooms) => {
+    if (autoCenter && building.latitude && building.longitude) {
+      setCenterTarget({ lng: building.longitude, lat: building.latitude, key: Date.now() });
     }
-    setExpandedItems((prev) =>
-      isExpanding ? [...prev, id] : prev.filter((x) => x !== id)
-    );
-  }, [expandedItems, autoCenter, buildings]);
+    setViewParkingId(null);
+    setViewLibrary(false);
+    setViewBuildingId(building.id);
+  }, [autoCenter]);
 
   const handleBuildingClick = useCallback((buildingId: string) => {
-    setExpandedItems((prev) =>
-      prev.includes(buildingId) ? prev : [...prev, buildingId]
-    );
+    // The map marker already flies to the building, so no extra centering here.
+    setViewParkingId(null);
+    setViewLibrary(false);
+    setViewBuildingId(buildingId);
     // On mobile, switch to list view when a marker is clicked
     if (isMobile) setShowMap(false);
   }, [isMobile]);
+
+  const handleParkingClick = useCallback((lotId: string) => {
+    setViewBuildingId(null);
+    setViewLibrary(false);
+    setViewParkingId(lotId);
+    if (isMobile) setShowMap(false);
+  }, [isMobile]);
+
+  const handleOpenLibrary = useCallback(() => {
+    setViewBuildingId(null);
+    setViewParkingId(null);
+    setViewLibrary(true);
+  }, []);
+
+  const handleLibraryClick = useCallback(() => {
+    handleOpenLibrary();
+    if (isMobile) setShowMap(false);
+  }, [handleOpenLibrary, isMobile]);
 
   function toggleMap() {
     setShowMap((v) => {
@@ -165,8 +188,14 @@ export default function Home() {
               isFetching={isFetching && !isLoading}
               selectedDateTime={selectedDateTime}
               onDateTimeChange={setSelectedDateTime}
-              expandedItems={expandedItems}
-              onToggleItem={handleToggleItem}
+              viewBuildingId={viewBuildingId}
+              onOpenBuilding={handleOpenBuilding}
+              onCloseBuilding={() => setViewBuildingId(null)}
+              viewParkingId={viewParkingId}
+              onCloseParking={() => setViewParkingId(null)}
+              viewLibrary={viewLibrary}
+              onOpenLibrary={handleOpenLibrary}
+              onCloseLibrary={() => setViewLibrary(false)}
               isMobile={isMobile}
               settings={{ darkMode, showMap, autoCenter, showParking }}
               onSettingsChange={handleSettingsChange}
@@ -179,6 +208,8 @@ export default function Home() {
               <CampusMap
                 buildings={buildings}
                 onBuildingClick={handleBuildingClick}
+                onParkingClick={handleParkingClick}
+                onLibraryClick={handleLibraryClick}
                 onMapReady={handleMapReady}
                 centerTarget={centerTarget}
                 showParking={showParking}
