@@ -15,7 +15,6 @@ import {
 } from '@/components/ui/tooltip';
 
 export interface AppSettings {
-  darkMode: boolean;
   showMap: boolean;
   autoCenter: boolean;
   showParking: boolean;
@@ -79,11 +78,6 @@ export default function SettingsMenu({ settings, onChange }: SettingsMenuProps) 
       <PopoverContent align="end" className="w-64 space-y-3">
         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Settings</p>
         <TooltipProvider delayDuration={100}>
-          <SettingRow
-            label="Dark mode"
-            checked={settings.darkMode}
-            onCheckedChange={(v) => onChange({ darkMode: v })}
-          />
           <SettingRow
             label="Hide map"
             checked={!settings.showMap}

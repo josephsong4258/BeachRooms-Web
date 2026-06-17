@@ -25,28 +25,6 @@
     --ring: 221 83% 20%;
     --radius: 0.5rem;
   }
-
-  .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 48%;
-  }
 }
 
 @layer base {
@@ -67,6 +45,15 @@
 @keyframes loading {
   0% { transform: translateX(-100%); }
   100% { transform: translateX(350%); }
+}
+
+/* Mobile detail pages slide in over the map + list sheet */
+@keyframes br-slide-in {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+.br-slideover {
+  animation: br-slide-in 260ms cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 /* Mapbox overrides */

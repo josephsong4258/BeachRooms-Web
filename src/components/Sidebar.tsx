@@ -249,15 +249,25 @@ export default function Sidebar({
     </div>
   );
 
-  // A study-spot sub-page (a library floor or a building study area) sits on
-  // top of its parent page; backing out clears it and reveals the parent.
-  if (selectedSpot) {
-    return <StudySpotDetail spot={selectedSpot} onBack={() => setSelectedSpot(null)} />;
-  }
+  // Resolve from the live `buildings` prop (not the filtered list) so the page
+  // shows every room and stays fresh across refetches.
+  const viewParking = viewParkingId
+    ? PARKING_LOTS.find((l) => l.id === viewParkingId) ?? null
+    : null;
+  const viewBuilding = viewBuildingId
+    ? buildings.find((b) => b.id === viewBuildingId) ?? null
+    : null;
 
-  // Library overview.
-  if (viewLibrary) {
-    return (
+  // The detail page (if any) renders as an overlay above the list rather than
+  // replacing it, so the list stays mounted and keeps its scroll position when
+  // the user backs out. Order/precedence matters: a study-spot sits on top of
+  // its parent (library/building), parking takes over from the map, and a room
+  // sits on its still-open building so backing out of the room returns there.
+  let detail: React.ReactNode = null;
+  if (selectedSpot) {
+    detail = <StudySpotDetail spot={selectedSpot} onBack={() => setSelectedSpot(null)} />;
+  } else if (viewLibrary) {
+    detail = (
       <LibraryDetail
         onBack={onCloseLibrary}
         onOpenFloor={(floorId) => {
@@ -266,38 +276,18 @@ export default function Sidebar({
         }}
       />
     );
-  }
-
-  // Parking takes over the sidebar when a lot is opened from the map, even if a
-  // room/building page is underneath; backing out reveals whatever was there.
-  const viewParking = viewParkingId
-    ? PARKING_LOTS.find((l) => l.id === viewParkingId) ?? null
-    : null;
-  if (viewParking) {
-    return <ParkingDetail lot={viewParking} onBack={onCloseParking} />;
-  }
-
-  // Order matters: the room check comes first, so drilling list → building →
-  // room shows the room, and backing out of the room falls through to the
-  // still-open building page below.
-  if (selectedRoom && selectedBuilding) {
-    return (
+  } else if (viewParking) {
+    detail = <ParkingDetail lot={viewParking} onBack={onCloseParking} />;
+  } else if (selectedRoom && selectedBuilding) {
+    detail = (
       <RoomDetail
         room={selectedRoom}
         building={selectedBuilding}
         onBack={() => { setSelectedRoom(null); setSelectedBuilding(null); }}
       />
     );
-  }
-
-  // Resolve from the live `buildings` prop (not the filtered list) so the page
-  // shows every room and stays fresh across refetches.
-  const viewBuilding = viewBuildingId
-    ? buildings.find((b) => b.id === viewBuildingId) ?? null
-    : null;
-
-  if (viewBuilding) {
-    return (
+  } else if (viewBuilding) {
+    detail = (
       <BuildingDetail
         building={viewBuilding}
         onBack={onCloseBuilding}
@@ -316,7 +306,8 @@ export default function Sidebar({
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="relative h-full">
+    <div className="flex flex-col h-full" style={{ display: detail ? 'none' : 'flex' }}>
       {/* Header */}
       <div className="px-4 pt-4 pb-3 border-b space-y-3">
         <div className="flex items-center justify-between">
@@ -445,6 +436,10 @@ export default function Sidebar({
           </DialogContent>
         </Dialog>
       )}
+    </div>
+
+      {/* Detail page overlays the (still-mounted) list above */}
+      {detail && <div className="absolute inset-0 bg-background">{detail}</div>}
     </div>
   );
 }

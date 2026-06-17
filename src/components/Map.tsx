@@ -8,6 +8,8 @@ import type { BuildingWithRooms } from '@/types';
 
 const CSULB_CENTER: [number, number] = [-118.113603, 33.778675];
 const INITIAL_ZOOM = 17.20;
+// Mobile starts zoomed out so the whole campus fits the narrower viewport
+const MOBILE_INITIAL_ZOOM = 16.0;
 const INITIAL_PITCH = 56.99;
 const INITIAL_BEARING = 21.6;
 const MIN_ZOOM = 14;
@@ -47,6 +49,10 @@ interface MapProps {
   onMapReady: () => void;
   centerTarget?: CenterTarget | null;
   showParking?: boolean;
+  isMobile?: boolean;
+  // Which building's page is open (null = list). Used to restore the camera
+  // to its pre-selection position when the user presses back.
+  selectedBuildingId?: string | null;
 }
 
 const PARKING_LAYER_IDS = ['parking-areas-fill', 'parking-areas-outline'];
@@ -154,6 +160,8 @@ export default function Map({
   onMapReady,
   centerTarget,
   showParking = true,
+  isMobile = false,
+  selectedBuildingId = null,
 }: MapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
@@ -162,6 +170,14 @@ export default function Map({
   // no collision/occlusion system can ever hide them.
   const markers = useRef<Record<string, mapboxgl.Marker>>({});
   const onMapReadyCalled = useRef(false);
+  // Camera position captured the moment a building is opened, so pressing back
+  // can fly the map back to the overview it came from.
+  const savedCamera = useRef<{
+    center: mapboxgl.LngLat;
+    zoom: number;
+    pitch: number;
+    bearing: number;
+  } | null>(null);
 
   // Refs for callbacks/data referenced inside Mapbox event handlers, so the
   // handlers always see the latest values without us re-registering them.
@@ -170,6 +186,9 @@ export default function Map({
   const onParkingClickRef = useRef(onParkingClick);
   const onLibraryClickRef = useRef(onLibraryClick);
   const showParkingRef = useRef(showParking);
+  // Mobile shows the short building code (e.g. "ECS") instead of the full name,
+  // which would otherwise crowd the smaller viewport.
+  const isMobileRef = useRef(isMobile);
   useEffect(() => { buildingsRef.current = buildings; }, [buildings]);
   useEffect(() => { onBuildingClickRef.current = onBuildingClick; }, [onBuildingClick]);
   useEffect(() => { onParkingClickRef.current = onParkingClick; }, [onParkingClick]);
@@ -193,6 +212,23 @@ export default function Map({
     }
   }, [showParking]);
 
+  // Fly to a building, snapshotting the current camera the first time we leave
+  // the overview so pressing back can restore it. Switching directly between
+  // buildings keeps the original snapshot (only the first leave is remembered).
+  const flyToBuilding = useCallback((lng: number, lat: number) => {
+    const m = map.current;
+    if (!m) return;
+    if (!savedCamera.current) {
+      savedCamera.current = {
+        center: m.getCenter(),
+        zoom: m.getZoom(),
+        pitch: m.getPitch(),
+        bearing: m.getBearing(),
+      };
+    }
+    m.flyTo({ center: [lng, lat], zoom: 17, duration: 800 });
+  }, []);
+
   const makeMarkerElement = useCallback(function makeMarkerElement(buildingId: string): HTMLDivElement {
     const el = document.createElement('div');
     el.className = 'building-marker';
@@ -215,11 +251,11 @@ export default function Map({
       const m = map.current;
       const b = buildingsRef.current.find((x) => x.id === buildingId);
       if (!m || !b) return;
-      m.flyTo({ center: [b.longitude, b.latitude], zoom: 17, duration: 800 });
+      flyToBuilding(b.longitude, b.latitude);
       onBuildingClickRef.current(buildingId);
     });
     return el;
-  }, []);
+  }, [flyToBuilding]);
 
   const updateBuildingPins = useCallback(() => {
     const m = map.current;
@@ -242,7 +278,7 @@ export default function Map({
       const el = marker.getElement();
       (el.querySelector('img') as HTMLImageElement).src = pinUrl(b);
       const label = el.querySelector('.building-marker-label') as HTMLDivElement;
-      label.textContent = b.name ?? b.code;
+      label.textContent = isMobileRef.current ? (b.code ?? b.name) : (b.name ?? b.code);
       const placement = LABEL_PLACEMENT[b.code];
       label.className = `building-marker-label${placement ? ` label-${placement}` : ''}`;
     }
@@ -264,7 +300,7 @@ export default function Map({
       container: mapContainer.current,
       style: process.env.NEXT_PUBLIC_MAPBOX_STYLE ?? DEFAULT_STYLE,
       center: CSULB_CENTER,
-      zoom: INITIAL_ZOOM,
+      zoom: isMobile ? MOBILE_INITIAL_ZOOM : INITIAL_ZOOM,
       pitch: INITIAL_PITCH,
       bearing: INITIAL_BEARING,
       minZoom: MIN_ZOOM,
@@ -561,15 +597,28 @@ export default function Map({
     updateBuildingPins();
   }, [buildings, updateBuildingPins]);
 
+  // Re-label pins when crossing the mobile/desktop breakpoint (resize/rotate)
+  useEffect(() => {
+    isMobileRef.current = isMobile;
+    updateBuildingPins();
+  }, [isMobile, updateBuildingPins]);
+
   // Fly to a building when asked (auto-center setting)
   useEffect(() => {
     if (!centerTarget || !map.current) return;
-    map.current.flyTo({
-      center: [centerTarget.lng, centerTarget.lat],
-      zoom: 17,
-      duration: 800,
-    });
-  }, [centerTarget]);
+    flyToBuilding(centerTarget.lng, centerTarget.lat);
+  }, [centerTarget, flyToBuilding]);
+
+  // Pressing back (building page closed) flies the map back to the overview it
+  // came from, so the user doesn't get stranded zoomed in.
+  useEffect(() => {
+    const m = map.current;
+    if (!m) return;
+    if (!selectedBuildingId && savedCamera.current) {
+      m.flyTo({ ...savedCamera.current, duration: 800 });
+      savedCamera.current = null;
+    }
+  }, [selectedBuildingId]);
 
   return <div ref={mapContainer} className="w-full h-full" />;
 }
