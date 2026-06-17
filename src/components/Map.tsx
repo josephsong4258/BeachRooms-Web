@@ -2,11 +2,16 @@
 import { useCallback, useEffect, useRef } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
-import { PARKING_LOTS, type ParkingLot } from '@/data/parking';
+import { PARKING_LOTS, isParkingOpenNow, type ParkingLot } from '@/data/parking';
+import { LIBRARY, isLibraryOpen } from '@/data/library';
 import type { BuildingWithRooms } from '@/types';
 
 const CSULB_CENTER: [number, number] = [-118.113603, 33.778675];
 const INITIAL_ZOOM = 17.20;
+// Mobile starts zoomed out so the whole campus fits the narrower viewport
+const MOBILE_INITIAL_ZOOM = 16.0;
+// Pins/labels render smaller on mobile so they don't crowd the narrow viewport
+const MOBILE_PIN_SCALE = 0.7;
 const INITIAL_PITCH = 56.99;
 const INITIAL_BEARING = 21.6;
 const MIN_ZOOM = 14;
@@ -41,9 +46,15 @@ export interface CenterTarget {
 interface MapProps {
   buildings: BuildingWithRooms[];
   onBuildingClick: (buildingId: string) => void;
+  onParkingClick: (lotId: string) => void;
+  onLibraryClick: () => void;
   onMapReady: () => void;
   centerTarget?: CenterTarget | null;
   showParking?: boolean;
+  isMobile?: boolean;
+  // Which building's page is open (null = list). Used to restore the camera
+  // to its pre-selection position when the user presses back.
+  selectedBuildingId?: string | null;
 }
 
 const PARKING_LAYER_IDS = ['parking-areas-fill', 'parking-areas-outline'];
@@ -53,19 +64,6 @@ function pinUrl(b: BuildingWithRooms): string {
   // an open-but-full building (red).
   if (!b.isOpen) return '/assets/pins/pin-gray.png';
   return b.availableCount > 0 ? '/assets/pins/pin-green.png' : '/assets/pins/pin-red.png';
-}
-
-// Employee lots allow general parking weekdays after 5:30 PM and all day
-// Saturday and Sunday.
-function isEmployeeLotOpenToAll(d: Date): boolean {
-  const day = d.getDay();
-  if (day === 0 || day === 6) return true;
-  return d.getHours() > 17 || (d.getHours() === 17 && d.getMinutes() >= 30);
-}
-
-// Green = student can park right now, red = they can't
-function isParkingOpenNow(lot: ParkingLot): boolean {
-  return lot.type === 'student' || isEmployeeLotOpenToAll(new Date());
 }
 
 // Traced surface lots render as shaded shapes beneath the 3D buildings.
@@ -88,6 +86,7 @@ function parkingGeoJSON(): GeoJSON.FeatureCollection {
         coordinates: [[...lot.polygon!, lot.polygon![0]]],
       },
       properties: {
+        id: lot.id,
         name: lot.name,
         lotType: lot.type,
         open: isParkingOpenNow(lot),
@@ -145,12 +144,26 @@ function popupHtml(b: BuildingWithRooms): string {
   </div>`;
 }
 
+function libraryPopupHtml(): string {
+  const open = isLibraryOpen();
+  return `<div style="padding:2px 0">
+    <div style="font-weight:600;font-size:13px">${LIBRARY.name}</div>
+    <div style="font-size:12px;color:${open ? '#1a9e3f' : '#6b7280'};margin-top:2px">
+      ${open ? 'Open' : 'Closed'}
+    </div>
+  </div>`;
+}
+
 export default function Map({
   buildings,
   onBuildingClick,
+  onParkingClick,
+  onLibraryClick,
   onMapReady,
   centerTarget,
   showParking = true,
+  isMobile = false,
+  selectedBuildingId = null,
 }: MapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
@@ -159,14 +172,32 @@ export default function Map({
   // no collision/occlusion system can ever hide them.
   const markers = useRef<Record<string, mapboxgl.Marker>>({});
   const onMapReadyCalled = useRef(false);
+  // Re-applies pin/label sizing; held in a ref so the mobile-breakpoint effect
+  // can re-run it when the viewport crosses the mobile threshold.
+  const applyPinScaleRef = useRef<(() => void) | null>(null);
+  // Camera position captured the moment a building is opened, so pressing back
+  // can fly the map back to the overview it came from.
+  const savedCamera = useRef<{
+    center: mapboxgl.LngLat;
+    zoom: number;
+    pitch: number;
+    bearing: number;
+  } | null>(null);
 
   // Refs for callbacks/data referenced inside Mapbox event handlers, so the
   // handlers always see the latest values without us re-registering them.
   const buildingsRef = useRef(buildings);
   const onBuildingClickRef = useRef(onBuildingClick);
+  const onParkingClickRef = useRef(onParkingClick);
+  const onLibraryClickRef = useRef(onLibraryClick);
   const showParkingRef = useRef(showParking);
+  // Mobile shows the short building code (e.g. "ECS") instead of the full name,
+  // which would otherwise crowd the smaller viewport.
+  const isMobileRef = useRef(isMobile);
   useEffect(() => { buildingsRef.current = buildings; }, [buildings]);
   useEffect(() => { onBuildingClickRef.current = onBuildingClick; }, [onBuildingClick]);
+  useEffect(() => { onParkingClickRef.current = onParkingClick; }, [onParkingClick]);
+  useEffect(() => { onLibraryClickRef.current = onLibraryClick; }, [onLibraryClick]);
 
   // Badge chips for structures/untraced lots (DOM markers, like the pins)
   const parkingChips = useRef<{ el: HTMLDivElement; lot: ParkingLot }[]>([]);
@@ -185,6 +216,23 @@ export default function Map({
       if (m.getLayer(id)) m.setLayoutProperty(id, 'visibility', visibility);
     }
   }, [showParking]);
+
+  // Fly to a building, snapshotting the current camera the first time we leave
+  // the overview so pressing back can restore it. Switching directly between
+  // buildings keeps the original snapshot (only the first leave is remembered).
+  const flyToBuilding = useCallback((lng: number, lat: number) => {
+    const m = map.current;
+    if (!m) return;
+    if (!savedCamera.current) {
+      savedCamera.current = {
+        center: m.getCenter(),
+        zoom: m.getZoom(),
+        pitch: m.getPitch(),
+        bearing: m.getBearing(),
+      };
+    }
+    m.flyTo({ center: [lng, lat], zoom: 17, duration: 800 });
+  }, []);
 
   const makeMarkerElement = useCallback(function makeMarkerElement(buildingId: string): HTMLDivElement {
     const el = document.createElement('div');
@@ -208,11 +256,11 @@ export default function Map({
       const m = map.current;
       const b = buildingsRef.current.find((x) => x.id === buildingId);
       if (!m || !b) return;
-      m.flyTo({ center: [b.longitude, b.latitude], zoom: 17, duration: 800 });
+      flyToBuilding(b.longitude, b.latitude);
       onBuildingClickRef.current(buildingId);
     });
     return el;
-  }, []);
+  }, [flyToBuilding]);
 
   const updateBuildingPins = useCallback(() => {
     const m = map.current;
@@ -235,7 +283,7 @@ export default function Map({
       const el = marker.getElement();
       (el.querySelector('img') as HTMLImageElement).src = pinUrl(b);
       const label = el.querySelector('.building-marker-label') as HTMLDivElement;
-      label.textContent = b.name ?? b.code;
+      label.textContent = isMobileRef.current ? (b.code ?? b.name) : (b.name ?? b.code);
       const placement = LABEL_PLACEMENT[b.code];
       label.className = `building-marker-label${placement ? ` label-${placement}` : ''}`;
     }
@@ -257,7 +305,7 @@ export default function Map({
       container: mapContainer.current,
       style: process.env.NEXT_PUBLIC_MAPBOX_STYLE ?? DEFAULT_STYLE,
       center: CSULB_CENTER,
-      zoom: INITIAL_ZOOM,
+      zoom: isMobile ? MOBILE_INITIAL_ZOOM : INITIAL_ZOOM,
       pitch: INITIAL_PITCH,
       bearing: INITIAL_BEARING,
       minZoom: MIN_ZOOM,
@@ -274,9 +322,11 @@ export default function Map({
       const z = map.current?.getZoom() ?? INITIAL_ZOOM;
       const iconT = Math.min(Math.max((z - 14) / (18 - 14), 0), 1);
       const fontT = Math.min(Math.max((z - 13) / (18 - 13), 0), 1);
-      container.style.setProperty('--pin-size', `${Math.round(13 + 19 * iconT)}px`);
-      container.style.setProperty('--pin-font', `${(8 + 4 * fontT).toFixed(1)}px`);
+      const scale = isMobileRef.current ? MOBILE_PIN_SCALE : 1;
+      container.style.setProperty('--pin-size', `${Math.round((13 + 19 * iconT) * scale)}px`);
+      container.style.setProperty('--pin-font', `${((8 + 4 * fontT) * scale).toFixed(1)}px`);
     };
+    applyPinScaleRef.current = applyPinScale;
     applyPinScale();
     map.current.on('zoom', applyPinScale);
 
@@ -290,6 +340,34 @@ export default function Map({
 
     // Markers don't need the style to be loaded
     updateBuildingPins();
+
+    // Library — a single static DOM marker (it isn't a scraped building, so it
+    // lives outside updateBuildingPins). Green when open, gray when closed.
+    {
+      const libEl = document.createElement('div');
+      libEl.className = 'building-marker';
+      const libImg = document.createElement('img');
+      libImg.alt = '';
+      libImg.draggable = false;
+      libImg.src = isLibraryOpen() ? '/assets/pins/pin-green.png' : '/assets/pins/pin-gray.png';
+      const libLabel = document.createElement('div');
+      libLabel.className = 'building-marker-label';
+      libLabel.textContent = 'Library';
+      libEl.append(libImg, libLabel);
+      libEl.addEventListener('mouseenter', () => {
+        const m = map.current;
+        if (m) popup.current?.setLngLat([LIBRARY.longitude, LIBRARY.latitude]).setHTML(libraryPopupHtml()).addTo(m);
+      });
+      libEl.addEventListener('mouseleave', () => popup.current?.remove());
+      libEl.addEventListener('click', (e) => {
+        e.stopPropagation();
+        popup.current?.remove();
+        onLibraryClickRef.current();
+      });
+      new mapboxgl.Marker({ element: libEl, anchor: 'center' })
+        .setLngLat([LIBRARY.longitude, LIBRARY.latitude])
+        .addTo(map.current);
+    }
 
     // Structure/untraced-lot badges: DOM markers so the 3D buildings can't
     // occlude them (same reason the building pins are DOM markers)
@@ -310,9 +388,11 @@ export default function Map({
       };
       el.addEventListener('mouseenter', showPopup);
       el.addEventListener('mouseleave', () => popup.current?.remove());
+      // Click opens the lot's page (with photo + ratings/comments)
       el.addEventListener('click', (e) => {
         e.stopPropagation();
-        showPopup();
+        popup.current?.remove();
+        onParkingClickRef.current(lot.id);
       });
       new mapboxgl.Marker({ element: el, anchor: 'center' })
         .setLngLat([lot.longitude, lot.latitude])
@@ -484,7 +564,15 @@ export default function Map({
           setHover(null);
           popup.current?.remove();
         });
-        m.on('click', 'parking-areas-fill', showParkingPopup);
+        // Click a lot opens its page (photo + ratings/comments)
+        m.on('click', 'parking-areas-fill', (e) => {
+          const f = e.features?.[0];
+          const id = f?.properties?.id;
+          if (typeof id === 'string') {
+            popup.current?.remove();
+            onParkingClickRef.current(id);
+          }
+        });
 
         // Employee lots flip between restricted/open at 5:30 PM
         parkingTimer = window.setInterval(() => {
@@ -516,15 +604,30 @@ export default function Map({
     updateBuildingPins();
   }, [buildings, updateBuildingPins]);
 
+  // Re-label and re-size pins when crossing the mobile/desktop breakpoint
+  // (resize/rotate): mobile uses the short code and a smaller pin/label.
+  useEffect(() => {
+    isMobileRef.current = isMobile;
+    updateBuildingPins();
+    applyPinScaleRef.current?.();
+  }, [isMobile, updateBuildingPins]);
+
   // Fly to a building when asked (auto-center setting)
   useEffect(() => {
     if (!centerTarget || !map.current) return;
-    map.current.flyTo({
-      center: [centerTarget.lng, centerTarget.lat],
-      zoom: 17,
-      duration: 800,
-    });
-  }, [centerTarget]);
+    flyToBuilding(centerTarget.lng, centerTarget.lat);
+  }, [centerTarget, flyToBuilding]);
+
+  // Pressing back (building page closed) flies the map back to the overview it
+  // came from, so the user doesn't get stranded zoomed in.
+  useEffect(() => {
+    const m = map.current;
+    if (!m) return;
+    if (!selectedBuildingId && savedCamera.current) {
+      m.flyTo({ ...savedCamera.current, duration: 800 });
+      savedCamera.current = null;
+    }
+  }, [selectedBuildingId]);
 
   return <div ref={mapContainer} className="w-full h-full" />;
 }

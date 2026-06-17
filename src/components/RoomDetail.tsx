@@ -3,13 +3,14 @@ import { useState } from 'react';
 import { ArrowLeft, Accessibility, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { TooltipProvider } from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import HourBlock from '@/components/HourBlock';
 import RoomComments from '@/components/RoomComments';
 import RoomRating from '@/components/RoomRating';
 import RoomStatusBadge from '@/components/RoomStatusBadge';
 import SignInDialog from '@/components/SignInDialog';
 import { useFavorites } from '@/lib/use-favorites';
+import { effectiveHours } from '@/lib/building-hours';
 import type { RoomAvailability, BuildingWithRooms } from '@/types';
 
 interface RoomDetailProps {
@@ -46,8 +47,15 @@ function StatusLine({ room, building }: { room: RoomAvailability; building: Buil
         </>
       );
     }
-    if (room.availableDurationMinutes != null && building.weekday_close) {
-      const [h, m] = building.weekday_close.split(':').map(Number);
+    // Closes at the building's effective close time today (folds in overrides).
+    const todayClose = effectiveHours(
+      building.code,
+      building.weekday_open,
+      building.weekday_close,
+      new Date()
+    )?.close;
+    if (room.availableDurationMinutes != null && todayClose) {
+      const [h, m] = todayClose.split(':').map(Number);
       const ampm = h >= 12 ? 'PM' : 'AM';
       const closeLabel = `${h % 12 || 12}:${String(m).padStart(2, '0')} ${ampm}`;
       return (
@@ -80,6 +88,14 @@ export default function RoomDetail({ room, building, onBack }: RoomDetailProps) 
     a.start_time.localeCompare(b.start_time)
   );
 
+  // Today's effective open hours for the timeline shading (null = closed today).
+  const todayHours = effectiveHours(
+    building.code,
+    building.weekday_open,
+    building.weekday_close,
+    new Date()
+  );
+
   function formatTime(t: string) {
     const [h, m] = t.split(':').map(Number);
     const ampm = h >= 12 ? 'PM' : 'AM';
@@ -99,9 +115,21 @@ export default function RoomDetail({ room, building, onBack }: RoomDetailProps) 
             </h2>
             <RoomStatusBadge status={room.status} />
             {room.is_alc && (
-              <span className="rounded-full border border-[#7ee8a0] bg-[#e6f9ec] px-2 py-0.5 text-[10px] font-semibold text-[#1a9e3f]">
-                Group Study
-              </span>
+              <TooltipProvider delayDuration={100}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="cursor-default rounded-full border border-[#c4b5fd] bg-[#ede9fe] px-2 py-0.5 text-[10px] font-semibold text-[#6d28d9]">
+                      Group Study
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-[220px]">
+                    <p className="text-xs">
+                      Classrooms designed for group work, with movable seating and
+                      collaborative layouts.
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             )}
           </div>
           <p className="text-xs text-muted-foreground truncate">{building.name}</p>
@@ -171,15 +199,18 @@ export default function RoomDetail({ room, building, onBack }: RoomDetailProps) 
             <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">
               Today&apos;s Schedule
             </p>
+            {/* Cap at the minimized-panel content width (max-w-[420px] − p-4)
+                so the aspect-square cells don't balloon when the map is hidden
+                and the sidebar goes full width. */}
             <TooltipProvider delayDuration={100}>
-              <div className="grid grid-cols-7 gap-1.5">
+              <div className="grid grid-cols-7 gap-1.5 max-w-[388px]">
                 {TIMELINE_HOURS.map((h) => (
                   <HourBlock
                     key={h}
                     hour={h}
                     schedules={room.todaySchedules}
-                    buildingOpen={building.weekday_open}
-                    buildingClose={building.weekday_close}
+                    buildingOpen={todayHours?.open ?? null}
+                    buildingClose={todayHours?.close ?? null}
                   />
                 ))}
               </div>

@@ -1,5 +1,5 @@
 'use client';
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import Image from 'next/image';
 import { Search, X, Calendar, RotateCcw } from 'lucide-react';
 import Fuse from 'fuse.js';
@@ -8,13 +8,21 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import BuildingAccordion from '@/components/BuildingAccordion';
+import BuildingList from '@/components/BuildingList';
+import BuildingDetail from '@/components/BuildingDetail';
+import ParkingDetail from '@/components/ParkingDetail';
+import LibraryDetail from '@/components/LibraryDetail';
+import StudySpotDetail from '@/components/StudySpotDetail';
 import RoomDetail from '@/components/RoomDetail';
+import { PARKING_LOTS } from '@/data/parking';
+import { LIBRARY, isLibraryOpen, libraryFloorSpot } from '@/data/library';
+import type { StudySpot } from '@/data/study-spots';
 import SettingsMenu, { type AppSettings } from '@/components/SettingsMenu';
 import FilterMenu, { EMPTY_FILTERS, type RoomFilters } from '@/components/FilterMenu';
 import SignInDialog from '@/components/SignInDialog';
 import { useFavorites } from '@/lib/use-favorites';
 import { formatTimeDisplay } from '@/lib/time-utils';
+import { effectiveHours } from '@/lib/building-hours';
 import type { BuildingWithRooms, RoomAvailability } from '@/types';
 
 function parseMinutes(t: string): number {
@@ -22,17 +30,19 @@ function parseMinutes(t: string): number {
   return h * 60 + m;
 }
 
-// A room is "free during" a window if the building is open for the whole
-// window and no class overlaps it.
+// A room is "free during" a window if the building is open (for refDate's day,
+// folding in any hours override) for the whole window and no class overlaps it.
 function isRoomFreeDuring(
   room: RoomAvailability,
   building: BuildingWithRooms,
   startMin: number,
-  endMin: number
+  endMin: number,
+  refDate: Date
 ): boolean {
-  if (!building.weekday_open || !building.weekday_close) return false;
-  if (startMin < parseMinutes(building.weekday_open)) return false;
-  if (endMin > parseMinutes(building.weekday_close)) return false;
+  const hours = effectiveHours(building.code, building.weekday_open, building.weekday_close, refDate);
+  if (!hours) return false;
+  if (startMin < parseMinutes(hours.open)) return false;
+  if (endMin > parseMinutes(hours.close)) return false;
   return !room.todaySchedules.some(
     (s) => parseMinutes(s.start_time) < endMin && parseMinutes(s.end_time) > startMin
   );
@@ -43,8 +53,18 @@ interface SidebarProps {
   isFetching: boolean;
   selectedDateTime: Date | null;
   onDateTimeChange: (dt: Date | null) => void;
-  expandedItems: string[];
-  onToggleItem: (id: string) => void;
+  // Which building page is open (null = list). Lives in page.tsx so map-marker
+  // taps can open it too.
+  viewBuildingId: string | null;
+  onOpenBuilding: (building: BuildingWithRooms) => void;
+  onCloseBuilding: () => void;
+  // Which parking-lot page is open (null = none); opened from map clicks.
+  viewParkingId: string | null;
+  onCloseParking: () => void;
+  // Library overview page (opened from the map pin or the list entry).
+  viewLibrary: boolean;
+  onOpenLibrary: () => void;
+  onCloseLibrary: () => void;
   isMobile: boolean;
   settings: AppSettings;
   onSettingsChange: (patch: Partial<AppSettings>) => void;
@@ -55,8 +75,14 @@ export default function Sidebar({
   isFetching,
   selectedDateTime,
   onDateTimeChange,
-  expandedItems,
-  onToggleItem,
+  viewBuildingId,
+  onOpenBuilding,
+  onCloseBuilding,
+  viewParkingId,
+  onCloseParking,
+  viewLibrary,
+  onOpenLibrary,
+  onCloseLibrary,
   isMobile,
   settings,
   onSettingsChange,
@@ -69,13 +95,22 @@ export default function Sidebar({
   const [pickerDate, setPickerDate] = useState('');
   const [pickerTime, setPickerTime] = useState('');
   const [showSignIn, setShowSignIn] = useState(false);
+  // Which study-spot sub-page is open — a library floor or a building's study
+  // area. Reset whenever the parent page (library or building) changes so it
+  // never lingers over the wrong context.
+  const [selectedSpot, setSelectedSpot] = useState<StudySpot | null>(null);
+  useEffect(() => {
+    setSelectedSpot(null);
+  }, [viewLibrary, viewBuildingId]);
 
   const {
     signedIn,
     favoriteRoomIds,
     favoriteBuildingIds,
+    favoritePlaceIds,
     toggleRoomFavorite,
     toggleBuildingFavorite,
+    togglePlaceFavorite,
   } = useFavorites();
 
   const handleToggleFavoriteRoom = useCallback(
@@ -86,6 +121,10 @@ export default function Sidebar({
     (id: string) => (signedIn ? toggleBuildingFavorite(id) : setShowSignIn(true)),
     [signedIn, toggleBuildingFavorite]
   );
+  const handleToggleFavoritePlace = useCallback(
+    (id: string) => (signedIn ? togglePlaceFavorite(id) : setShowSignIn(true)),
+    [signedIn, togglePlaceFavorite]
+  );
 
   // Apply filters (group study, free-from time window) and recompute building counts
   const baseBuildings = useMemo(() => {
@@ -93,6 +132,7 @@ export default function Sidebar({
     const hasWindow = startTime !== null || minDurationHours !== null;
     if (!groupStudyOnly && !hasWindow) return buildings;
 
+    const refDate = selectedDateTime ?? new Date();
     let windowStartMin = 0;
     let windowEndMin = 0;
     if (hasWindow) {
@@ -100,8 +140,7 @@ export default function Sidebar({
         const [h, m] = startTime.split(':').map(Number);
         windowStartMin = h * 60 + m;
       } else {
-        const ref = selectedDateTime ?? new Date();
-        windowStartMin = ref.getHours() * 60 + ref.getMinutes();
+        windowStartMin = refDate.getHours() * 60 + refDate.getMinutes();
       }
       // No duration selected = just "free at that time"
       windowEndMin = windowStartMin + Math.max((minDurationHours ?? 0) * 60, 1);
@@ -112,7 +151,7 @@ export default function Sidebar({
         let rooms = b.rooms;
         if (groupStudyOnly) rooms = rooms.filter((r) => r.is_alc);
         if (hasWindow) {
-          rooms = rooms.filter((r) => isRoomFreeDuring(r, b, windowStartMin, windowEndMin));
+          rooms = rooms.filter((r) => isRoomFreeDuring(r, b, windowStartMin, windowEndMin, refDate));
         }
         return {
           ...b,
@@ -161,6 +200,12 @@ export default function Sidebar({
 
   const isCustomTime = selectedDateTime !== null;
 
+  // Show the library entry unless a search is active that the library doesn't
+  // match. Group-study filter also hides it (it has no scraped rooms).
+  const libQuery = searchQuery.trim().toLowerCase();
+  const showLibraryRow =
+    !filters.groupStudyOnly && (libQuery === '' || 'university library'.includes(libQuery));
+
   function openDatePicker() {
     const now = selectedDateTime ?? new Date();
     const y = now.getFullYear();
@@ -204,20 +249,67 @@ export default function Sidebar({
     </div>
   );
 
-  if (selectedRoom && selectedBuilding) {
-    return (
+  // Resolve from the live `buildings` prop (not the filtered list) so the page
+  // shows every room and stays fresh across refetches.
+  const viewParking = viewParkingId
+    ? PARKING_LOTS.find((l) => l.id === viewParkingId) ?? null
+    : null;
+  const viewBuilding = viewBuildingId
+    ? buildings.find((b) => b.id === viewBuildingId) ?? null
+    : null;
+
+  // The detail page (if any) renders as an overlay above the list rather than
+  // replacing it, so the list stays mounted and keeps its scroll position when
+  // the user backs out. Order/precedence matters: a study-spot sits on top of
+  // its parent (library/building), parking takes over from the map, and a room
+  // sits on its still-open building so backing out of the room returns there.
+  let detail: React.ReactNode = null;
+  if (selectedSpot) {
+    detail = <StudySpotDetail spot={selectedSpot} onBack={() => setSelectedSpot(null)} />;
+  } else if (viewLibrary) {
+    detail = (
+      <LibraryDetail
+        onBack={onCloseLibrary}
+        onOpenFloor={(floorId) => {
+          const floor = LIBRARY.floors.find((f) => f.id === floorId);
+          if (floor) setSelectedSpot(libraryFloorSpot(floor));
+        }}
+      />
+    );
+  } else if (viewParking) {
+    detail = <ParkingDetail lot={viewParking} onBack={onCloseParking} />;
+  } else if (selectedRoom && selectedBuilding) {
+    detail = (
       <RoomDetail
         room={selectedRoom}
         building={selectedBuilding}
         onBack={() => { setSelectedRoom(null); setSelectedBuilding(null); }}
       />
     );
+  } else if (viewBuilding) {
+    detail = (
+      <BuildingDetail
+        building={viewBuilding}
+        onBack={onCloseBuilding}
+        onRoomClick={(room, building) => {
+          setSelectedRoom(room);
+          setSelectedBuilding(building);
+          // viewBuilding stays set → backing out of the room returns here
+        }}
+        onSpotClick={setSelectedSpot}
+        favoriteRoomIds={favoriteRoomIds}
+        onToggleFavoriteRoom={handleToggleFavoriteRoom}
+        favoriteBuildingIds={favoriteBuildingIds}
+        onToggleFavoriteBuilding={handleToggleFavoriteBuilding}
+      />
+    );
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="relative h-full">
+    <div className="flex flex-col h-full" style={{ display: detail ? 'none' : 'flex' }}>
       {/* Header */}
-      <div className="px-4 pt-4 pb-3 border-b space-y-3">
+      <div className={`px-4 ${isMobile ? 'pt-1' : 'pt-4'} pb-3 border-b space-y-3`}>
         <div className="flex items-center justify-between">
           <Image
             src="/assets/logo/logo.png"
@@ -287,13 +379,10 @@ export default function Sidebar({
         )}
         <ScrollArea className="h-full">
           <div className="px-2 py-2">
-            {filteredBuildings.length === 0 && !isFetching ? (
-              <p className="text-center text-sm text-muted-foreground py-8">No results found</p>
-            ) : (
-              <BuildingAccordion
+            {filteredBuildings.length > 0 || showLibraryRow ? (
+              <BuildingList
                 buildings={filteredBuildings}
-                expandedItems={expandedItems}
-                onToggle={onToggleItem}
+                onOpenBuilding={onOpenBuilding}
                 onRoomClick={(room, building) => {
                   setSelectedRoom(room);
                   setSelectedBuilding(building);
@@ -303,8 +392,23 @@ export default function Sidebar({
                 favoriteBuildingIds={favoriteBuildingIds}
                 onToggleFavoriteRoom={handleToggleFavoriteRoom}
                 onToggleFavoriteBuilding={handleToggleFavoriteBuilding}
+                libraryEntry={
+                  showLibraryRow
+                    ? {
+                        name: LIBRARY.name,
+                        isOpen: isLibraryOpen(),
+                        isFavorite: favoritePlaceIds.has(LIBRARY.id),
+                        onOpen: onOpenLibrary,
+                        onToggleFavorite: () => handleToggleFavoritePlace(LIBRARY.id),
+                      }
+                    : null
+                }
                 showFavorites={searchQuery.trim() === ''}
               />
+            ) : (
+              !isFetching && (
+                <p className="text-center text-sm text-muted-foreground py-8">No results found</p>
+              )
             )}
           </div>
         </ScrollArea>
@@ -332,6 +436,10 @@ export default function Sidebar({
           </DialogContent>
         </Dialog>
       )}
+    </div>
+
+      {/* Detail page overlays the (still-mounted) list above */}
+      {detail && <div className="absolute inset-0 bg-background">{detail}</div>}
     </div>
   );
 }

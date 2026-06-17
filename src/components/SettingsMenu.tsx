@@ -15,7 +15,6 @@ import {
 } from '@/components/ui/tooltip';
 
 export interface AppSettings {
-  darkMode: boolean;
   showMap: boolean;
   autoCenter: boolean;
   showParking: boolean;
@@ -80,11 +79,6 @@ export default function SettingsMenu({ settings, onChange }: SettingsMenuProps) 
         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Settings</p>
         <TooltipProvider delayDuration={100}>
           <SettingRow
-            label="Dark mode"
-            checked={settings.darkMode}
-            onCheckedChange={(v) => onChange({ darkMode: v })}
-          />
-          <SettingRow
             label="Hide map"
             checked={!settings.showMap}
             onCheckedChange={(v) => onChange({ showMap: !v })}
@@ -97,7 +91,7 @@ export default function SettingsMenu({ settings, onChange }: SettingsMenuProps) 
           />
           <SettingRow
             label="Auto-center building"
-            help="When you expand a building in the list, the map automatically centers on it."
+            help="When you open a building from the list, the map automatically centers on it."
             checked={settings.autoCenter}
             onCheckedChange={(v) => onChange({ autoCenter: v })}
           />

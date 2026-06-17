@@ -15,6 +15,7 @@
 create or replace function generate_handle()
 returns text
 language sql volatile
+set search_path = ''
 as $$
   select 'Shark #' || lpad(floor(random() * 10000)::text, 4, '0')
 $$;
@@ -158,3 +159,11 @@ create policy "delete own" on comments
 
 revoke update on profiles from anon, authenticated;
 grant update (display_name) on profiles to authenticated;
+
+-- These are trigger functions: they fire on insert as the table owner and are
+-- never meant to be called directly. Supabase grants EXECUTE on public
+-- functions to anon/authenticated by default (exposing them as RPC endpoints),
+-- so revoke it to satisfy the linter and shrink the surface area.
+revoke execute on function generate_handle() from public, anon, authenticated;
+revoke execute on function handle_new_user() from public, anon, authenticated;
+revoke execute on function check_comment_rate_limit() from public, anon, authenticated;

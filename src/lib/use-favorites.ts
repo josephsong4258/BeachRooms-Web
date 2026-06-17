@@ -7,9 +7,10 @@ import { useUser } from '@/lib/use-auth';
 interface FavoriteRow {
   classroom_id: string | null;
   building_id: string | null;
+  place_id: string | null;
 }
 
-type FavoriteColumn = 'classroom_id' | 'building_id';
+type FavoriteColumn = 'classroom_id' | 'building_id' | 'place_id';
 
 export function useFavorites() {
   const { user } = useUser();
@@ -22,7 +23,7 @@ export function useFavorites() {
     queryFn: async (): Promise<FavoriteRow[]> => {
       const { data, error } = await supabase
         .from('favorites')
-        .select('classroom_id, building_id')
+        .select('classroom_id, building_id, place_id')
         .eq('user_id', user!.id);
       if (error) throw new Error(error.message);
       return data;
@@ -35,6 +36,10 @@ export function useFavorites() {
   );
   const favoriteBuildingIds = useMemo(
     () => new Set((data ?? []).flatMap((r) => (r.building_id ? [r.building_id] : []))),
+    [data]
+  );
+  const favoritePlaceIds = useMemo(
+    () => new Set((data ?? []).flatMap((r) => (r.place_id ? [r.place_id] : []))),
     [data]
   );
 
@@ -62,7 +67,7 @@ export function useFavorites() {
       queryClient.setQueryData<FavoriteRow[]>(queryKey, (rows = []) =>
         active
           ? rows.filter((r) => r[column] !== id)
-          : [...rows, { classroom_id: null, building_id: null, [column]: id }]
+          : [...rows, { classroom_id: null, building_id: null, place_id: null, [column]: id }]
       );
       return { prev };
     },
@@ -81,12 +86,18 @@ export function useFavorites() {
     (id: string) => mutate({ column: 'building_id', id, active: favoriteBuildingIds.has(id) }),
     [mutate, favoriteBuildingIds]
   );
+  const togglePlaceFavorite = useCallback(
+    (id: string) => mutate({ column: 'place_id', id, active: favoritePlaceIds.has(id) }),
+    [mutate, favoritePlaceIds]
+  );
 
   return {
     signedIn: !!user,
     favoriteRoomIds,
     favoriteBuildingIds,
+    favoritePlaceIds,
     toggleRoomFavorite,
     toggleBuildingFavorite,
+    togglePlaceFavorite,
   };
 }
