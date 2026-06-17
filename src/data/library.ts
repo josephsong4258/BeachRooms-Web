@@ -27,7 +27,7 @@ export const LIBRARY = {
   // icon on each row conveys.
   floors: [
     { id: 'lower', name: 'Lower Level', type: 'group' },
-    { id: '1', name: '1st Floor', type: 'group', note: 'Spidell Technology Center' },
+    { id: '1', name: '1st Floor', type: 'group' },
     { id: '2', name: '2nd Floor', type: 'group' },
     { id: '3', name: '3rd Floor', type: 'group' },
     { id: '4', name: '4th Floor', type: 'quiet', note: 'The only designated quiet study area on campus' },

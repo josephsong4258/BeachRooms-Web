@@ -10,6 +10,8 @@ const CSULB_CENTER: [number, number] = [-118.113603, 33.778675];
 const INITIAL_ZOOM = 17.20;
 // Mobile starts zoomed out so the whole campus fits the narrower viewport
 const MOBILE_INITIAL_ZOOM = 16.0;
+// Pins/labels render smaller on mobile so they don't crowd the narrow viewport
+const MOBILE_PIN_SCALE = 0.7;
 const INITIAL_PITCH = 56.99;
 const INITIAL_BEARING = 21.6;
 const MIN_ZOOM = 14;
@@ -170,6 +172,9 @@ export default function Map({
   // no collision/occlusion system can ever hide them.
   const markers = useRef<Record<string, mapboxgl.Marker>>({});
   const onMapReadyCalled = useRef(false);
+  // Re-applies pin/label sizing; held in a ref so the mobile-breakpoint effect
+  // can re-run it when the viewport crosses the mobile threshold.
+  const applyPinScaleRef = useRef<(() => void) | null>(null);
   // Camera position captured the moment a building is opened, so pressing back
   // can fly the map back to the overview it came from.
   const savedCamera = useRef<{
@@ -317,9 +322,11 @@ export default function Map({
       const z = map.current?.getZoom() ?? INITIAL_ZOOM;
       const iconT = Math.min(Math.max((z - 14) / (18 - 14), 0), 1);
       const fontT = Math.min(Math.max((z - 13) / (18 - 13), 0), 1);
-      container.style.setProperty('--pin-size', `${Math.round(13 + 19 * iconT)}px`);
-      container.style.setProperty('--pin-font', `${(8 + 4 * fontT).toFixed(1)}px`);
+      const scale = isMobileRef.current ? MOBILE_PIN_SCALE : 1;
+      container.style.setProperty('--pin-size', `${Math.round((13 + 19 * iconT) * scale)}px`);
+      container.style.setProperty('--pin-font', `${((8 + 4 * fontT) * scale).toFixed(1)}px`);
     };
+    applyPinScaleRef.current = applyPinScale;
     applyPinScale();
     map.current.on('zoom', applyPinScale);
 
@@ -597,10 +604,12 @@ export default function Map({
     updateBuildingPins();
   }, [buildings, updateBuildingPins]);
 
-  // Re-label pins when crossing the mobile/desktop breakpoint (resize/rotate)
+  // Re-label and re-size pins when crossing the mobile/desktop breakpoint
+  // (resize/rotate): mobile uses the short code and a smaller pin/label.
   useEffect(() => {
     isMobileRef.current = isMobile;
     updateBuildingPins();
+    applyPinScaleRef.current?.();
   }, [isMobile, updateBuildingPins]);
 
   // Fly to a building when asked (auto-center setting)
