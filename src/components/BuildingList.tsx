@@ -199,7 +199,6 @@ function BuildingList({
               onToggleFavorite={() => onToggleFavoriteRoom(room.id)}
             />
           ))}
-          {favoriteRooms.length > 0 && favoriteRows.length > 0 && <SectionDivider />}
           {favoriteRows.map(renderRow)}
           <SectionDivider />
         </>

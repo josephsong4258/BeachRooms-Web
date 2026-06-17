@@ -284,6 +284,7 @@ export default function Sidebar({
         room={selectedRoom}
         building={selectedBuilding}
         onBack={() => { setSelectedRoom(null); setSelectedBuilding(null); }}
+        isMobile={isMobile}
       />
     );
   } else if (viewBuilding) {

@@ -125,7 +125,7 @@ export default function ParkingDetail({ lot, onBack }: ParkingDetailProps) {
             table="place_ratings"
             column="place_id"
             subjectId={placeId}
-            question="Could you find parking here?"
+            question={isStudent ? 'Could you find parking here?' : 'Could you find parking here after 5:30?'}
             onRequireSignIn={() => setShowSignIn(true)}
           />
 
@@ -134,7 +134,7 @@ export default function ParkingDetail({ lot, onBack }: ParkingDetailProps) {
             table="place_comments"
             column="place_id"
             subjectId={placeId}
-            placeholder="Share tips: how full does this lot get, best times, permit/gate notes, etc"
+            placeholder="Share tips/comments: how full does this lot get, best times etc"
           />
         </div>
       </ScrollArea>

@@ -1,5 +1,6 @@
 'use client';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import type { ClassSchedule } from '@/types';
 
 interface HourBlockProps {
@@ -7,6 +8,11 @@ interface HourBlockProps {
   schedules: ClassSchedule[];
   buildingOpen: string | null; // "HH:MM:SS"
   buildingClose: string | null;
+  // Hours that have already elapsed today are dimmed.
+  past?: boolean;
+  // Mobile has no hover, so the block opens its detail on tap (Popover) instead
+  // of on hover (Tooltip).
+  isMobile?: boolean;
 }
 
 function parseMinutes(t: string): number {
@@ -21,7 +27,14 @@ function formatClock(minutes: number): string {
   return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${ampm}`;
 }
 
-export default function HourBlock({ hour, schedules, buildingOpen, buildingClose }: HourBlockProps) {
+export default function HourBlock({
+  hour,
+  schedules,
+  buildingOpen,
+  buildingClose,
+  past = false,
+  isMobile = false,
+}: HourBlockProps) {
   const blockStart = hour * 60;
   const blockEnd = blockStart + 60;
 
@@ -57,50 +70,69 @@ export default function HourBlock({ hour, schedules, buildingOpen, buildingClose
   const fullyClosed = closedSegments.some((c) => c.width >= 100);
   const label = `${hour % 12 || 12} ${hour >= 12 ? 'PM' : 'AM'}`;
 
+  const cell = (
+    <div
+      className="relative aspect-square cursor-pointer overflow-hidden rounded-lg bg-[#d9f3e2] ring-1 ring-black/5"
+      style={past ? { opacity: 0.4 } : undefined}
+    >
+      {closedSegments.map((c, i) => (
+        <div
+          key={`closed-${i}`}
+          className="absolute inset-y-0 bg-[#f9d9dd]"
+          style={{ left: `${c.left}%`, width: `${c.width}%` }}
+        />
+      ))}
+      {classSegments.map((seg) => (
+        <div
+          key={seg.schedule.id}
+          className="absolute inset-y-0 bg-[#f9d9dd]"
+          style={{
+            left: `${((seg.start - blockStart) / 60) * 100}%`,
+            width: `${((seg.end - seg.start) / 60) * 100}%`,
+          }}
+        />
+      ))}
+      <span className="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-gray-600">
+        {label}
+      </span>
+    </div>
+  );
+
+  const info = (
+    <>
+      <p className="font-medium">
+        {formatClock(blockStart)} – {formatClock(blockEnd)}
+      </p>
+      {fullyClosed ? (
+        <p className="text-xs text-muted-foreground">Building closed</p>
+      ) : classSegments.length > 0 ? (
+        classSegments.map((seg) => (
+          <p key={seg.schedule.id} className="text-xs text-muted-foreground">
+            {seg.schedule.course_code ?? 'Class'}:{' '}
+            {formatClock(parseMinutes(seg.schedule.start_time))} –{' '}
+            {formatClock(parseMinutes(seg.schedule.end_time))}
+          </p>
+        ))
+      ) : (
+        <p className="text-xs text-muted-foreground">Available</p>
+      )}
+    </>
+  );
+
+  // Mobile: tap to open (no hover). Desktop: hover.
+  if (isMobile) {
+    return (
+      <Popover>
+        <PopoverTrigger asChild>{cell}</PopoverTrigger>
+        <PopoverContent className="w-auto max-w-[240px] p-3">{info}</PopoverContent>
+      </Popover>
+    );
+  }
+
   return (
     <Tooltip>
-      <TooltipTrigger asChild>
-        <div className="relative aspect-square rounded-lg overflow-hidden bg-[#d9f3e2] ring-1 ring-black/5 cursor-default">
-          {closedSegments.map((c, i) => (
-            <div
-              key={`closed-${i}`}
-              className="absolute inset-y-0 bg-[#f9d9dd]"
-              style={{ left: `${c.left}%`, width: `${c.width}%` }}
-            />
-          ))}
-          {classSegments.map((seg) => (
-            <div
-              key={seg.schedule.id}
-              className="absolute inset-y-0 bg-[#f9d9dd]"
-              style={{
-                left: `${((seg.start - blockStart) / 60) * 100}%`,
-                width: `${((seg.end - seg.start) / 60) * 100}%`,
-              }}
-            />
-          ))}
-          <span className="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-gray-600">
-            {label}
-          </span>
-        </div>
-      </TooltipTrigger>
-      <TooltipContent>
-        <p className="font-medium">
-          {formatClock(blockStart)} – {formatClock(blockEnd)}
-        </p>
-        {fullyClosed ? (
-          <p className="text-xs text-muted-foreground">Building closed</p>
-        ) : classSegments.length > 0 ? (
-          classSegments.map((seg) => (
-            <p key={seg.schedule.id} className="text-xs text-muted-foreground">
-              {seg.schedule.course_code ?? 'Class'}:{' '}
-              {formatClock(parseMinutes(seg.schedule.start_time))} –{' '}
-              {formatClock(parseMinutes(seg.schedule.end_time))}
-            </p>
-          ))
-        ) : (
-          <p className="text-xs text-muted-foreground">Available</p>
-        )}
-      </TooltipContent>
+      <TooltipTrigger asChild>{cell}</TooltipTrigger>
+      <TooltipContent>{info}</TooltipContent>
     </Tooltip>
   );
 }

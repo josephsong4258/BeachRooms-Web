@@ -11,13 +11,25 @@ import RoomStatusBadge from '@/components/RoomStatusBadge';
 import SignInDialog from '@/components/SignInDialog';
 import { useFavorites } from '@/lib/use-favorites';
 import { effectiveHours } from '@/lib/building-hours';
-import type { RoomAvailability, BuildingWithRooms } from '@/types';
+import type { RoomAvailability, BuildingWithRooms, AvailabilityStatus } from '@/types';
 
 interface RoomDetailProps {
   room: RoomAvailability;
   building: BuildingWithRooms;
   onBack: () => void;
+  isMobile?: boolean;
 }
+
+// Status card styling per availability state (matches the building pill palette).
+const STATUS_CARD: Record<
+  AvailabilityStatus,
+  { label: string; box: string; dot: string; text: string }
+> = {
+  open: { label: 'Open now', box: 'border-[#7ee8a0] bg-[#e6f9ec]', dot: 'bg-[#1a9e3f]', text: 'text-[#1a9e3f]' },
+  limited: { label: 'Limited', box: 'border-[#f0c879] bg-[#fdf4e3]', dot: 'bg-[#b7791f]', text: 'text-[#b7791f]' },
+  in_use: { label: 'In use', box: 'border-[#f5a3ab] bg-[#fde8ea]', dot: 'bg-[#c9303a]', text: 'text-[#c9303a]' },
+  closed: { label: 'Closed', box: 'border-[#d4d4d8] bg-[#f4f4f5]', dot: 'bg-[#6b7280]', text: 'text-[#6b7280]' },
+};
 
 // One block per hour, 8 AM through 9 PM
 const TIMELINE_HOURS = Array.from({ length: 14 }, (_, i) => i + 8);
@@ -79,10 +91,16 @@ function StatusLine({ room, building }: { room: RoomAvailability; building: Buil
   return <>{room.statusText.split('\n')[0]}</>;
 }
 
-export default function RoomDetail({ room, building, onBack }: RoomDetailProps) {
+export default function RoomDetail({ room, building, onBack, isMobile = false }: RoomDetailProps) {
   const { signedIn, favoriteRoomIds, toggleRoomFavorite } = useFavorites();
   const [showSignIn, setShowSignIn] = useState(false);
   const isFavorite = favoriteRoomIds.has(room.id);
+  // The timeline dims hours before the current hour; the class list dims
+  // classes that have already ended.
+  const now = new Date();
+  const currentHour = now.getHours();
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const statusCard = STATUS_CARD[room.status];
 
   const sortedSchedules = [...room.todaySchedules].sort((a, b) =>
     a.start_time.localeCompare(b.start_time)
@@ -160,9 +178,13 @@ export default function RoomDetail({ room, building, onBack }: RoomDetailProps) 
 
       <ScrollArea className="flex-1">
         <div className="p-4 space-y-5">
-          {/* Status text */}
-          <div className="rounded-lg bg-muted/50 px-4 py-3">
-            <p className="text-sm font-medium">
+          {/* Status card */}
+          <div className={`rounded-xl border px-4 py-3 ${statusCard.box}`}>
+            <div className={`flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide ${statusCard.text}`}>
+              <span className={`h-2 w-2 rounded-full ${statusCard.dot}`} />
+              {statusCard.label}
+            </div>
+            <p className="mt-1 text-[15px] font-medium text-gray-900">
               <StatusLine room={room} building={building} />
             </p>
           </div>
@@ -211,6 +233,8 @@ export default function RoomDetail({ room, building, onBack }: RoomDetailProps) 
                     schedules={room.todaySchedules}
                     buildingOpen={todayHours?.open ?? null}
                     buildingClose={todayHours?.close ?? null}
+                    past={h < currentHour}
+                    isMobile={isMobile}
                   />
                 ))}
               </div>
@@ -232,17 +256,22 @@ export default function RoomDetail({ room, building, onBack }: RoomDetailProps) 
                 Classes Today
               </p>
               <div className="space-y-1.5">
-                {sortedSchedules.map((s) => (
-                  <div
-                    key={s.id}
-                    className="flex items-center justify-between rounded-md bg-muted/50 px-3 py-2 text-sm"
-                  >
-                    <span className="font-medium">{s.course_code ?? 'Class'}</span>
-                    <span className="text-muted-foreground text-xs">
-                      {formatTime(s.start_time)} – {formatTime(s.end_time)}
-                    </span>
-                  </div>
-                ))}
+                {sortedSchedules.map((s) => {
+                  const [eh, em] = s.end_time.split(':').map(Number);
+                  const ended = eh * 60 + em <= nowMinutes;
+                  return (
+                    <div
+                      key={s.id}
+                      className="flex items-center justify-between rounded-md bg-muted/50 px-3 py-2 text-sm"
+                      style={ended ? { opacity: 0.4 } : undefined}
+                    >
+                      <span className="font-medium">{s.course_code ?? 'Class'}</span>
+                      <span className="text-muted-foreground text-xs">
+                        {formatTime(s.start_time)} – {formatTime(s.end_time)}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
