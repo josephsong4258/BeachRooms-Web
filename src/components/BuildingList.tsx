@@ -9,6 +9,17 @@ import {
 } from '@/components/building-shared';
 import type { BuildingWithRooms, RoomAvailability } from '@/types';
 
+// The University Library is a "special place" (no scraped rooms, so it's not in
+// `buildings`), but it lists and favorites like a building. Passed in so it can
+// be interleaved alphabetically and pinned to the favorites section.
+export interface LibraryEntry {
+  name: string;
+  isOpen: boolean;
+  isFavorite: boolean;
+  onOpen: () => void;
+  onToggleFavorite: () => void;
+}
+
 interface BuildingListProps {
   buildings: BuildingWithRooms[];
   onOpenBuilding: (building: BuildingWithRooms) => void;
@@ -19,6 +30,8 @@ interface BuildingListProps {
   favoriteBuildingIds: Set<string>;
   onToggleFavoriteRoom: (id: string) => void;
   onToggleFavoriteBuilding: (id: string) => void;
+  // The library, or null when search/filters hide it
+  libraryEntry: LibraryEntry | null;
   // Hidden while searching — search results take over the whole list
   showFavorites: boolean;
 }
@@ -70,9 +83,47 @@ function BuildingNavRow({
   );
 }
 
+// The library row: same shape as BuildingNavRow, but a status pill (Open/Closed)
+// stands in for the room-count badge, and it navigates to the library page.
+function LibraryNavRow({ entry }: { entry: LibraryEntry }) {
+  return (
+    <div className="flex w-full items-center border-b border-border/60 py-2 pr-1 transition-colors hover:bg-accent/40">
+      <FavoriteStar
+        active={entry.isFavorite}
+        onToggle={entry.onToggleFavorite}
+        label={entry.isFavorite ? 'Remove library from favorites' : 'Add library to favorites'}
+      />
+      <button
+        onClick={entry.onOpen}
+        className="flex min-w-0 flex-1 items-center justify-between text-left"
+      >
+        <span className="ml-1 truncate text-sm font-semibold text-foreground/85">{entry.name}</span>
+        <div className="flex shrink-0 items-center gap-2 pl-2">
+          <span
+            className={`min-w-[37px] rounded-full border px-2 py-0.5 text-center text-[10px] font-semibold ${
+              entry.isOpen
+                ? 'border-[#7ee8a0] bg-[#e6f9ec] text-[#1a9e3f]'
+                : 'border-[#d4d4d8] bg-[#f4f4f5] text-[#6b7280]'
+            }`}
+          >
+            {entry.isOpen ? 'Open' : 'Closed'}
+          </span>
+          <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/60" />
+        </div>
+      </button>
+    </div>
+  );
+}
+
 function SectionDivider() {
   return <div className="my-1.5 h-px bg-border" aria-hidden="true" />;
 }
+
+// One alphabetical stream of building + library rows; the library carries its
+// own favorite/open state since it isn't a BuildingWithRooms.
+type NavRow =
+  | { kind: 'building'; name: string; building: BuildingWithRooms }
+  | { kind: 'library'; name: string; entry: LibraryEntry };
 
 function BuildingList({
   buildings,
@@ -83,6 +134,7 @@ function BuildingList({
   favoriteBuildingIds,
   onToggleFavoriteRoom,
   onToggleFavoriteBuilding,
+  libraryEntry,
   showFavorites,
 }: BuildingListProps) {
   const now = Date.now();
@@ -104,25 +156,33 @@ function BuildingList({
         })
     : [];
 
-  // Favorited buildings move to the top section rather than appearing twice
-  const favoriteBuildings = showFavorites
-    ? buildings.filter((b) => favoriteBuildingIds.has(b.id))
-    : [];
-  const mainBuildings = showFavorites
-    ? buildings.filter((b) => !favoriteBuildingIds.has(b.id))
-    : buildings;
-  const hasFavorites = favoriteRooms.length > 0 || favoriteBuildings.length > 0;
+  // Buildings + the library, as one stream sorted by name.
+  const allRows: NavRow[] = buildings.map((b) => ({ kind: 'building', name: b.name, building: b }));
+  if (libraryEntry) {
+    allRows.push({ kind: 'library', name: libraryEntry.name, entry: libraryEntry });
+  }
+  const isRowFavorite = (r: NavRow) =>
+    r.kind === 'building' ? favoriteBuildingIds.has(r.building.id) : r.entry.isFavorite;
+  const byName = (a: NavRow, b: NavRow) => a.name.localeCompare(b.name);
 
-  const renderBuilding = (b: BuildingWithRooms) => (
-    <BuildingNavRow
-      key={b.id}
-      building={b}
-      searchQuery={searchQuery}
-      isFavorite={favoriteBuildingIds.has(b.id)}
-      onToggleFavorite={() => onToggleFavoriteBuilding(b.id)}
-      onOpen={() => onOpenBuilding(b)}
-    />
-  );
+  // Favorited rows move to the top section rather than appearing twice.
+  const favoriteRows = showFavorites ? allRows.filter(isRowFavorite).sort(byName) : [];
+  const mainRows = (showFavorites ? allRows.filter((r) => !isRowFavorite(r)) : allRows).sort(byName);
+  const hasFavorites = favoriteRooms.length > 0 || favoriteRows.length > 0;
+
+  const renderRow = (r: NavRow) =>
+    r.kind === 'building' ? (
+      <BuildingNavRow
+        key={r.building.id}
+        building={r.building}
+        searchQuery={searchQuery}
+        isFavorite={favoriteBuildingIds.has(r.building.id)}
+        onToggleFavorite={() => onToggleFavoriteBuilding(r.building.id)}
+        onOpen={() => onOpenBuilding(r.building)}
+      />
+    ) : (
+      <LibraryNavRow key="library" entry={r.entry} />
+    );
 
   return (
     <div className="w-full px-2">
@@ -139,12 +199,12 @@ function BuildingList({
               onToggleFavorite={() => onToggleFavoriteRoom(room.id)}
             />
           ))}
-          {favoriteRooms.length > 0 && favoriteBuildings.length > 0 && <SectionDivider />}
-          {favoriteBuildings.map(renderBuilding)}
+          {favoriteRooms.length > 0 && favoriteRows.length > 0 && <SectionDivider />}
+          {favoriteRows.map(renderRow)}
           <SectionDivider />
         </>
       )}
-      {mainBuildings.map(renderBuilding)}
+      {mainRows.map(renderRow)}
     </div>
   );
 }

@@ -1,14 +1,14 @@
 'use client';
 import Image from 'next/image';
-import { ArrowLeft, Calendar, ChevronRight, Volume2, VolumeX } from 'lucide-react';
+import { ArrowLeft, Calendar } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import StudySpotRow from '@/components/StudySpotRow';
 import {
   LIBRARY,
   LIBRARY_IMAGE,
   libraryHoursToday,
   isLibraryOpen,
-  type LibraryFloor,
 } from '@/data/library';
 
 interface LibraryDetailProps {
@@ -22,61 +22,9 @@ function formatClock(time: string): string {
   return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${ampm}`;
 }
 
-function FloorRow({ floor, onOpen }: { floor: LibraryFloor; onOpen: () => void }) {
-  const quiet = floor.type === 'quiet';
-  return (
-    <button
-      onClick={onOpen}
-      className="flex w-full items-center gap-3 border-b border-border/60 py-2.5 text-left transition-colors last:border-b-0 hover:bg-accent/40"
-    >
-      <span
-        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${
-          quiet ? 'bg-[#eef2ff] text-[#4f46e5]' : 'bg-[#fef6e6] text-[#b5850b]'
-        }`}
-      >
-        {quiet ? <VolumeX className="h-3.5 w-3.5" /> : <Volume2 className="h-3.5 w-3.5" />}
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block text-sm font-semibold">{floor.name}</span>
-        {floor.note && (
-          <span className="block truncate text-[13px] text-muted-foreground">{floor.note}</span>
-        )}
-      </span>
-      <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
-    </button>
-  );
-}
-
-function FloorGroup({
-  label,
-  floors,
-  onOpenFloor,
-}: {
-  label: string;
-  floors: LibraryFloor[];
-  onOpenFloor: (id: string) => void;
-}) {
-  if (floors.length === 0) return null;
-  return (
-    <div>
-      <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        {label}
-        <span className="text-muted-foreground/60"> · {floors.length}</span>
-      </p>
-      <div>
-        {floors.map((f) => (
-          <FloorRow key={f.id} floor={f} onOpen={() => onOpenFloor(f.id)} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
 export default function LibraryDetail({ onBack, onOpenFloor }: LibraryDetailProps) {
   const open = isLibraryOpen();
   const todayHours = libraryHoursToday();
-  const quietFloors = LIBRARY.floors.filter((f) => f.type === 'quiet');
-  const groupFloors = LIBRARY.floors.filter((f) => f.type === 'group');
 
   return (
     <div className="flex h-full flex-col">
@@ -131,9 +79,24 @@ export default function LibraryDetail({ onBack, onOpenFloor }: LibraryDetailProp
           </span>
         </div>
 
-        <div className="space-y-5 p-4">
-          <FloorGroup label="Quiet study" floors={quietFloors} onOpenFloor={onOpenFloor} />
-          <FloorGroup label="Group study" floors={groupFloors} onOpenFloor={onOpenFloor} />
+        {/* Floors, listed Lower Level → 5th. One ordered list: the noise icon
+            on each row marks quiet vs. collaborative, so no further grouping. */}
+        <div className="p-4">
+          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Floors
+            <span className="text-muted-foreground/60"> · {LIBRARY.floors.length}</span>
+          </p>
+          <div>
+            {LIBRARY.floors.map((f) => (
+              <StudySpotRow
+                key={f.id}
+                name={f.name}
+                note={f.note}
+                type={f.type}
+                onClick={() => onOpenFloor(f.id)}
+              />
+            ))}
+          </div>
         </div>
       </ScrollArea>
     </div>

@@ -1,7 +1,7 @@
 'use client';
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import Image from 'next/image';
-import { Search, X, Calendar, RotateCcw, ChevronRight, BookOpen } from 'lucide-react';
+import { Search, X, Calendar, RotateCcw } from 'lucide-react';
 import Fuse from 'fuse.js';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -12,10 +12,11 @@ import BuildingList from '@/components/BuildingList';
 import BuildingDetail from '@/components/BuildingDetail';
 import ParkingDetail from '@/components/ParkingDetail';
 import LibraryDetail from '@/components/LibraryDetail';
-import LibraryFloorDetail from '@/components/LibraryFloorDetail';
+import StudySpotDetail from '@/components/StudySpotDetail';
 import RoomDetail from '@/components/RoomDetail';
 import { PARKING_LOTS } from '@/data/parking';
-import { LIBRARY, isLibraryOpen } from '@/data/library';
+import { LIBRARY, isLibraryOpen, libraryFloorSpot } from '@/data/library';
+import type { StudySpot } from '@/data/study-spots';
 import SettingsMenu, { type AppSettings } from '@/components/SettingsMenu';
 import FilterMenu, { EMPTY_FILTERS, type RoomFilters } from '@/components/FilterMenu';
 import SignInDialog from '@/components/SignInDialog';
@@ -94,18 +95,22 @@ export default function Sidebar({
   const [pickerDate, setPickerDate] = useState('');
   const [pickerTime, setPickerTime] = useState('');
   const [showSignIn, setShowSignIn] = useState(false);
-  // Which library floor sub-page is open; reset whenever the library closes.
-  const [libraryFloorId, setLibraryFloorId] = useState<string | null>(null);
+  // Which study-spot sub-page is open — a library floor or a building's study
+  // area. Reset whenever the parent page (library or building) changes so it
+  // never lingers over the wrong context.
+  const [selectedSpot, setSelectedSpot] = useState<StudySpot | null>(null);
   useEffect(() => {
-    if (!viewLibrary) setLibraryFloorId(null);
-  }, [viewLibrary]);
+    setSelectedSpot(null);
+  }, [viewLibrary, viewBuildingId]);
 
   const {
     signedIn,
     favoriteRoomIds,
     favoriteBuildingIds,
+    favoritePlaceIds,
     toggleRoomFavorite,
     toggleBuildingFavorite,
+    togglePlaceFavorite,
   } = useFavorites();
 
   const handleToggleFavoriteRoom = useCallback(
@@ -115,6 +120,10 @@ export default function Sidebar({
   const handleToggleFavoriteBuilding = useCallback(
     (id: string) => (signedIn ? toggleBuildingFavorite(id) : setShowSignIn(true)),
     [signedIn, toggleBuildingFavorite]
+  );
+  const handleToggleFavoritePlace = useCallback(
+    (id: string) => (signedIn ? togglePlaceFavorite(id) : setShowSignIn(true)),
+    [signedIn, togglePlaceFavorite]
   );
 
   // Apply filters (group study, free-from time window) and recompute building counts
@@ -240,16 +249,23 @@ export default function Sidebar({
     </div>
   );
 
-  // Library overview, and its floor sub-pages (floor first so back from a floor
-  // returns to the library overview).
+  // A study-spot sub-page (a library floor or a building study area) sits on
+  // top of its parent page; backing out clears it and reveals the parent.
+  if (selectedSpot) {
+    return <StudySpotDetail spot={selectedSpot} onBack={() => setSelectedSpot(null)} />;
+  }
+
+  // Library overview.
   if (viewLibrary) {
-    const floor = libraryFloorId
-      ? LIBRARY.floors.find((f) => f.id === libraryFloorId) ?? null
-      : null;
-    if (floor) {
-      return <LibraryFloorDetail floor={floor} onBack={() => setLibraryFloorId(null)} />;
-    }
-    return <LibraryDetail onBack={onCloseLibrary} onOpenFloor={setLibraryFloorId} />;
+    return (
+      <LibraryDetail
+        onBack={onCloseLibrary}
+        onOpenFloor={(floorId) => {
+          const floor = LIBRARY.floors.find((f) => f.id === floorId);
+          if (floor) setSelectedSpot(libraryFloorSpot(floor));
+        }}
+      />
+    );
   }
 
   // Parking takes over the sidebar when a lot is opened from the map, even if a
@@ -290,6 +306,7 @@ export default function Sidebar({
           setSelectedBuilding(building);
           // viewBuilding stays set → backing out of the room returns here
         }}
+        onSpotClick={setSelectedSpot}
         favoriteRoomIds={favoriteRoomIds}
         onToggleFavoriteRoom={handleToggleFavoriteRoom}
         favoriteBuildingIds={favoriteBuildingIds}
@@ -371,32 +388,7 @@ export default function Sidebar({
         )}
         <ScrollArea className="h-full">
           <div className="px-2 py-2">
-            {showLibraryRow && (
-              <button
-                onClick={onOpenLibrary}
-                className="flex w-full items-center gap-2.5 border-b border-border/60 py-2 pr-1 text-left transition-colors hover:bg-accent/40"
-              >
-                <span className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-[#eef2ff] text-[#4f46e5]">
-                  <BookOpen className="h-3.5 w-3.5" />
-                </span>
-                <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground/85">
-                  {LIBRARY.name}
-                </span>
-                <span className="flex shrink-0 items-center gap-2 pl-2">
-                  <span
-                    className={`min-w-[37px] rounded-full border px-2 py-0.5 text-center text-[10px] font-semibold ${
-                      isLibraryOpen()
-                        ? 'border-[#7ee8a0] bg-[#e6f9ec] text-[#1a9e3f]'
-                        : 'border-[#d4d4d8] bg-[#f4f4f5] text-[#6b7280]'
-                    }`}
-                  >
-                    {isLibraryOpen() ? 'Open' : 'Closed'}
-                  </span>
-                  <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/60" />
-                </span>
-              </button>
-            )}
-            {filteredBuildings.length > 0 ? (
+            {filteredBuildings.length > 0 || showLibraryRow ? (
               <BuildingList
                 buildings={filteredBuildings}
                 onOpenBuilding={onOpenBuilding}
@@ -409,11 +401,21 @@ export default function Sidebar({
                 favoriteBuildingIds={favoriteBuildingIds}
                 onToggleFavoriteRoom={handleToggleFavoriteRoom}
                 onToggleFavoriteBuilding={handleToggleFavoriteBuilding}
+                libraryEntry={
+                  showLibraryRow
+                    ? {
+                        name: LIBRARY.name,
+                        isOpen: isLibraryOpen(),
+                        isFavorite: favoritePlaceIds.has(LIBRARY.id),
+                        onOpen: onOpenLibrary,
+                        onToggleFavorite: () => handleToggleFavoritePlace(LIBRARY.id),
+                      }
+                    : null
+                }
                 showFavorites={searchQuery.trim() === ''}
               />
             ) : (
-              !isFetching &&
-              !showLibraryRow && (
+              !isFetching && (
                 <p className="text-center text-sm text-muted-foreground py-8">No results found</p>
               )
             )}

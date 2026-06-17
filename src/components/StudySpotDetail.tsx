@@ -7,17 +7,16 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import Rating from '@/components/Rating';
 import Comments from '@/components/Comments';
 import SignInDialog from '@/components/SignInDialog';
-import { libraryFloorImage, type LibraryFloor } from '@/data/library';
+import type { StudySpot } from '@/data/study-spots';
 
-interface LibraryFloorDetailProps {
-  floor: LibraryFloor;
+interface StudySpotDetailProps {
+  spot: StudySpot;
   onBack: () => void;
 }
 
-export default function LibraryFloorDetail({ floor, onBack }: LibraryFloorDetailProps) {
+export default function StudySpotDetail({ spot, onBack }: StudySpotDetailProps) {
   const [showSignIn, setShowSignIn] = useState(false);
-  const quiet = floor.type === 'quiet';
-  const placeId = `library:${floor.id}`;
+  const quiet = spot.type === 'quiet';
 
   return (
     <div className="flex h-full flex-col">
@@ -27,7 +26,7 @@ export default function LibraryFloorDetail({ floor, onBack }: LibraryFloorDetail
         </Button>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <h2 className="truncate text-base font-semibold">{floor.name}</h2>
+            <h2 className="truncate text-base font-semibold">{spot.name}</h2>
             <span
               className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
                 quiet
@@ -39,7 +38,7 @@ export default function LibraryFloorDetail({ floor, onBack }: LibraryFloorDetail
               {quiet ? 'Quiet study' : 'Group study'}
             </span>
           </div>
-          <p className="text-xs text-muted-foreground">University Library</p>
+          <p className="text-xs text-muted-foreground">{spot.parentName}</p>
         </div>
       </div>
 
@@ -52,8 +51,8 @@ export default function LibraryFloorDetail({ floor, onBack }: LibraryFloorDetail
       <ScrollArea className="flex-1">
         <div className="relative h-[210px] w-full shrink-0 overflow-hidden bg-muted">
           <Image
-            src={libraryFloorImage(floor.id)}
-            alt={`${floor.name} of the University Library`}
+            src={spot.image}
+            alt={`${spot.name} at ${spot.parentName}`}
             fill
             sizes="(max-width: 1024px) 100vw, 420px"
             className="object-cover"
@@ -70,16 +69,16 @@ export default function LibraryFloorDetail({ floor, onBack }: LibraryFloorDetail
             )}
             <span>
               {quiet
-                ? 'Designated quiet study area — keep noise to a minimum.'
-                : 'Collaborative space — expect it to be noisy.'}
-              {floor.note ? ` ${floor.note}.` : ''}
+                ? 'Designated quiet study area. Keep noise to a minimum.'
+                : 'Collaborative space. Expect it to be noisy.'}
+              {spot.note ? ` ${spot.note}.` : ''}
             </span>
           </div>
 
           <Rating
             table="place_ratings"
             column="place_id"
-            subjectId={placeId}
+            subjectId={spot.placeId}
             question="Could you find a seat?"
             onRequireSignIn={() => setShowSignIn(true)}
           />
@@ -87,7 +86,7 @@ export default function LibraryFloorDetail({ floor, onBack }: LibraryFloorDetail
           <Comments
             table="place_comments"
             column="place_id"
-            subjectId={placeId}
+            subjectId={spot.placeId}
             placeholder="Share tips: outlets, noise, seating, busy times, etc"
           />
         </div>

@@ -4,7 +4,8 @@
 // striped placeholder on its page.
 const LOTS_WITH_PHOTOS = new Set([
   'g1', 'g2', 'g3', 'g4', 'g5', 'g6', 'g7', 'g8', 'g9', 'g11',
-  'g12', 'g12-e', 'g13', 'g14', 'pv-north', 'pv-south', 'pyramid', 'e3', 'e4',
+  'g12', 'g12-e', 'g13', 'g14', 'pv-north', 'pv-south', 'pyramid',
+  'e1', 'e2', 'e3', 'e4', 'e5', 'e6', 'e7', 'e8', 'e9', 'e10', 'e11',
 ]);
 
 export function parkingImage(lotId: string): string | null {

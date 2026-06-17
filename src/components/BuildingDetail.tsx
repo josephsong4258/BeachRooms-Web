@@ -4,15 +4,18 @@ import { ArrowLeft, Accessibility, Calendar, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { groupRooms, RoomRow, ClosedPanel } from '@/components/building-shared';
+import StudySpotRow from '@/components/StudySpotRow';
 import { buildingNeighborhood } from '@/lib/neighborhoods';
 import { buildingImage } from '@/lib/building-images';
 import { effectiveHours } from '@/lib/building-hours';
+import { buildingStudySpots, type StudySpot } from '@/data/study-spots';
 import type { BuildingWithRooms, RoomAvailability } from '@/types';
 
 interface BuildingDetailProps {
   building: BuildingWithRooms;
   onBack: () => void;
   onRoomClick: (room: RoomAvailability, building: BuildingWithRooms) => void;
+  onSpotClick: (spot: StudySpot) => void;
   favoriteRoomIds: Set<string>;
   onToggleFavoriteRoom: (id: string) => void;
   favoriteBuildingIds: Set<string>;
@@ -104,6 +107,7 @@ export default function BuildingDetail({
   building,
   onBack,
   onRoomClick,
+  onSpotClick,
   favoriteRoomIds,
   onToggleFavoriteRoom,
   favoriteBuildingIds,
@@ -112,6 +116,8 @@ export default function BuildingDetail({
   const isFavorite = favoriteBuildingIds.has(building.id);
   const accessible = building.rooms.some((r) => r.is_accessible);
   const neighborhood = buildingNeighborhood(building.code);
+  // Open study areas (e.g. the Horn Center's), rateable like library floors.
+  const spots = buildingStudySpots(building.code);
   // Prefer a DB-provided photo; otherwise use the bundled one for this code.
   const imageSrc = building.imageUrl ?? buildingImage(building.code);
   // Today's effective hours (folds in per-building overrides); null = closed today.
@@ -193,6 +199,26 @@ export default function BuildingDetail({
             </span>
           )}
         </div>
+
+        {/* Open study areas (collaborative spaces, rateable like library
+            floors). Shown regardless of open/closed so they can be browsed
+            and rated anytime. */}
+        {spots.length > 0 && (
+          <div className="border-b px-4 pb-4 pt-4">
+            <SectionLabel label="Study spots" count={spots.length} />
+            <div>
+              {spots.map((spot) => (
+                <StudySpotRow
+                  key={spot.placeId}
+                  name={spot.name}
+                  note={spot.note}
+                  type={spot.type}
+                  onClick={() => onSpotClick(spot)}
+                />
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Rooms (or closed message) */}
         {building.isOpen ? (
