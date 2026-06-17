@@ -309,7 +309,7 @@ export default function Sidebar({
     <div className="relative h-full">
     <div className="flex flex-col h-full" style={{ display: detail ? 'none' : 'flex' }}>
       {/* Header */}
-      <div className="px-4 pt-4 pb-3 border-b space-y-3">
+      <div className={`px-4 ${isMobile ? 'pt-1' : 'pt-4'} pb-3 border-b space-y-3`}>
         <div className="flex items-center justify-between">
           <Image
             src="/assets/logo/logo.png"

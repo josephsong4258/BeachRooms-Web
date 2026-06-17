@@ -103,7 +103,7 @@ export default function MobileSheet({ detailOpen, children }: MobileSheetProps) 
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
-          className="flex shrink-0 cursor-grab justify-center pb-2 pt-2.5 active:cursor-grabbing"
+          className="flex shrink-0 cursor-grab justify-center pb-1 pt-2.5 active:cursor-grabbing"
           style={{ touchAction: 'none', display: detailOpen ? 'none' : 'flex' }}
         >
           <div className="h-[5px] w-9 rounded-full bg-muted-foreground/30" />
