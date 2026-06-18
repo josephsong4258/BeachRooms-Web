@@ -188,18 +188,22 @@ function BuildingList({
     <div className="w-full px-2">
       {hasFavorites && (
         <>
-          {favoriteRooms.map(({ room, building }) => (
-            <RoomRow
-              key={`fav-${room.id}`}
-              room={room}
-              type={classifyRoom(room, now)}
-              buildingCode={building.code}
-              onClick={() => onRoomClick(room, building)}
-              isFavorite
-              onToggleFavorite={() => onToggleFavoriteRoom(room.id)}
-            />
-          ))}
-          {favoriteRows.map(renderRow)}
+          {/* Strip the last favorite row's own border so the SectionDivider
+              below is the only line between favorites and the main list. */}
+          <div className="[&>*:last-child]:border-b-0">
+            {favoriteRooms.map(({ room, building }) => (
+              <RoomRow
+                key={`fav-${room.id}`}
+                room={room}
+                type={classifyRoom(room, now)}
+                buildingCode={building.code}
+                onClick={() => onRoomClick(room, building)}
+                isFavorite
+                onToggleFavorite={() => onToggleFavoriteRoom(room.id)}
+              />
+            ))}
+            {favoriteRows.map(renderRow)}
+          </div>
           <SectionDivider />
         </>
       )}
