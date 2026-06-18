@@ -604,6 +604,9 @@ export default function Map({
       parkingChips.current = [];
       onMapReadyCalled.current = false;
     };
+    // Init runs once: it reads isMobile at mount for the initial zoom/bounds,
+    // and the breakpoint effect below keeps maxBounds in sync after that.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onMapReady, updateBuildingPins]);
 
   // Reconcile markers whenever buildings changes
