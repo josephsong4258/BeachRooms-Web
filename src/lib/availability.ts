@@ -18,6 +18,20 @@ export function campusNow(): Date {
   return new Date(new Date().toLocaleString('en-US', { timeZone: CAMPUS_TIME_ZONE }));
 }
 
+// Serialize a Date whose *local* fields hold campus wall-clock time into a
+// naive datetime string (no timezone designator). `toISOString()` can't be
+// used here: it converts to the absolute UTC instant, so on a UTC server a
+// 3:00 PM Date becomes "T15:00:00Z", which a Pacific client then reads back as
+// 8:00 AM. A naive string round-trips through `new Date(str)` to the same
+// wall-clock hour on any client, matching how this module treats these Dates.
+export function toCampusWallClockString(date: Date): string {
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  return (
+    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
+    `T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+  );
+}
+
 export function parseTimeToday(timeString: string, referenceDate: Date = new Date()): Date {
   const parts = timeString.split(':').map(Number);
   const hours = parts[0];

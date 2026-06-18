@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { unstable_cache } from 'next/cache';
 import { supabase } from '@/lib/supabase';
-import { calculateAvailability, campusNow } from '@/lib/availability';
+import { calculateAvailability, campusNow, toCampusWallClockString } from '@/lib/availability';
 import { ROOMS_CACHE_TAG } from '@/lib/cache';
 import type {
   ClassroomWithBuilding,
@@ -169,8 +169,8 @@ export async function GET(request: NextRequest) {
       isAvailable: avail.isAvailable,
       isBuildingOpen: avail.isBuildingOpen,
       statusText: avail.statusText,
-      nextClassStartsAt: avail.nextClassStartsAt?.toISOString() ?? null,
-      currentClassEndsAt: avail.currentClassEndsAt?.toISOString() ?? null,
+      nextClassStartsAt: avail.nextClassStartsAt ? toCampusWallClockString(avail.nextClassStartsAt) : null,
+      currentClassEndsAt: avail.currentClassEndsAt ? toCampusWallClockString(avail.currentClassEndsAt) : null,
       minutesUntilNextClass: avail.minutesUntilNextClass,
       availableDurationMinutes: avail.availableDurationMinutes,
       todaySchedules: roomSchedules,
