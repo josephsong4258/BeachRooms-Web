@@ -3,7 +3,8 @@ import { useState } from 'react';
 import { ArrowLeft, Accessibility, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
+import InfoPopover from '@/components/InfoPopover';
 import HourBlock from '@/components/HourBlock';
 import RoomComments from '@/components/RoomComments';
 import RoomRating from '@/components/RoomRating';
@@ -133,21 +134,20 @@ export default function RoomDetail({ room, building, onBack, isMobile = false }:
             </h2>
             <RoomStatusBadge status={room.status} />
             {room.is_alc && (
-              <TooltipProvider delayDuration={100}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="cursor-default rounded-full border border-[#c4b5fd] bg-[#ede9fe] px-2 py-0.5 text-[10px] font-semibold text-[#6d28d9]">
-                      Group Study
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent className="max-w-[220px]">
-                    <p className="text-xs">
-                      Classrooms designed for group work, with movable seating and
-                      collaborative layouts.
-                    </p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              <InfoPopover
+                trigger={
+                  <button
+                    type="button"
+                    aria-label="What are group study rooms?"
+                    className="cursor-pointer rounded-full border border-[#c4b5fd] bg-[#ede9fe] px-2 py-0.5 text-[10px] font-semibold text-[#6d28d9]"
+                  >
+                    Group Study
+                  </button>
+                }
+              >
+                Classrooms designed for group work, with movable seating and
+                collaborative layouts.
+              </InfoPopover>
             )}
           </div>
           <p className="text-xs text-muted-foreground truncate">{building.name}</p>

@@ -76,6 +76,22 @@ const getSchedulesForDay = unstable_cache(
   { revalidate: CACHE_SECONDS, tags: [ROOMS_CACHE_TAG] }
 );
 
+// The scraper emits one row per section, so cross-listed or multi-instructor
+// classes that share a room/time appear as several identical blocks. They're a
+// single physical occupancy, so collapse to one per (course, start, end) before
+// it reaches availability math and the UI.
+function dedupeSchedules(schedules: ClassSchedule[]): ClassSchedule[] {
+  const seen = new Set<string>();
+  const out: ClassSchedule[] = [];
+  for (const s of schedules) {
+    const key = `${s.course_code ?? ''}|${s.start_time}|${s.end_time}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(s);
+  }
+  return out;
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const dateParam = searchParams.get('date');
@@ -121,7 +137,7 @@ export async function GET(request: NextRequest) {
     if (cw.building.code === 'OFF') continue;
 
     const { building } = cw;
-    const roomSchedules = schedulesByRoom.get(cw.id) ?? [];
+    const roomSchedules = dedupeSchedules(schedulesByRoom.get(cw.id) ?? []);
     const avail = calculateAvailability(cw, roomSchedules, queryTime);
 
     if (!buildingsMap[building.id]) {
