@@ -1,11 +1,11 @@
 'use client';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import type { ClassSchedule } from '@/types';
+import type { RoomSchedule } from '@/types';
 
 interface HourBlockProps {
   hour: number; // block covers [hour:00, hour+1:00)
-  schedules: ClassSchedule[];
+  schedules: RoomSchedule[];
   buildingOpen: string | null; // "HH:MM:SS"
   buildingClose: string | null;
   // Hours that have already elapsed today are dimmed.
@@ -84,7 +84,7 @@ export default function HourBlock({
       ))}
       {classSegments.map((seg) => (
         <div
-          key={seg.schedule.id}
+          key={`${seg.schedule.start_time}-${seg.schedule.end_time}`}
           className="absolute inset-y-0 bg-[#f9d9dd]"
           style={{
             left: `${((seg.start - blockStart) / 60) * 100}%`,
@@ -107,7 +107,10 @@ export default function HourBlock({
         <p className="text-xs text-muted-foreground">Building closed</p>
       ) : classSegments.length > 0 ? (
         classSegments.map((seg) => (
-          <p key={seg.schedule.id} className="text-xs text-muted-foreground">
+          <p
+            key={`${seg.schedule.start_time}-${seg.schedule.end_time}`}
+            className="text-xs text-muted-foreground"
+          >
             {seg.schedule.course_code ?? 'Class'}:{' '}
             {formatClock(parseMinutes(seg.schedule.start_time))} –{' '}
             {formatClock(parseMinutes(seg.schedule.end_time))}

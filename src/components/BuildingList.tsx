@@ -115,8 +115,12 @@ function LibraryNavRow({ entry }: { entry: LibraryEntry }) {
   );
 }
 
-function SectionDivider() {
-  return <div className="my-1.5 h-px bg-border" aria-hidden="true" />;
+function SectionHeader({ children }: { children: React.ReactNode }) {
+  return (
+    <h2 className="px-2 pb-1 pt-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+      {children}
+    </h2>
+  );
 }
 
 // One alphabetical stream of building + library rows; the library carries its
@@ -165,9 +169,13 @@ function BuildingList({
     r.kind === 'building' ? favoriteBuildingIds.has(r.building.id) : r.entry.isFavorite;
   const byName = (a: NavRow, b: NavRow) => a.name.localeCompare(b.name);
 
-  // Favorited rows move to the top section rather than appearing twice.
+  // Favorited rows move to the Favorites section rather than appearing twice.
+  // The rest split by kind: the library (and any future special place) is an
+  // "Official Study Space"; scraped buildings are "Classrooms".
   const favoriteRows = showFavorites ? allRows.filter(isRowFavorite).sort(byName) : [];
-  const mainRows = (showFavorites ? allRows.filter((r) => !isRowFavorite(r)) : allRows).sort(byName);
+  const remainingRows = showFavorites ? allRows.filter((r) => !isRowFavorite(r)) : allRows;
+  const studySpaceRows = remainingRows.filter((r) => r.kind === 'library').sort(byName);
+  const classroomRows = remainingRows.filter((r) => r.kind === 'building').sort(byName);
   const hasFavorites = favoriteRooms.length > 0 || favoriteRows.length > 0;
 
   const renderRow = (r: NavRow) =>
@@ -184,12 +192,24 @@ function BuildingList({
       <LibraryNavRow key="library" entry={r.entry} />
     );
 
+  // While searching, headers and the favorites section are suppressed — results
+  // take over the whole list as one stream (study spaces first, then rooms).
+  if (!showFavorites) {
+    return (
+      <div className="w-full px-2">
+        {studySpaceRows.map(renderRow)}
+        {classroomRows.map(renderRow)}
+      </div>
+    );
+  }
+
+  // Each section strips its last row's bottom border so the gap before the next
+  // section header is the only separator between groups.
   return (
     <div className="w-full px-2">
       {hasFavorites && (
-        <>
-          {/* Strip the last favorite row's own border so the SectionDivider
-              below is the only line between favorites and the main list. */}
+        <section>
+          <SectionHeader>Favorites</SectionHeader>
           <div className="[&>*:last-child]:border-b-0">
             {favoriteRooms.map(({ room, building }) => (
               <RoomRow
@@ -204,10 +224,22 @@ function BuildingList({
             ))}
             {favoriteRows.map(renderRow)}
           </div>
-          <SectionDivider />
-        </>
+        </section>
       )}
-      {mainRows.map(renderRow)}
+
+      {studySpaceRows.length > 0 && (
+        <section>
+          <SectionHeader>Official Study Spaces</SectionHeader>
+          <div className="[&>*:last-child]:border-b-0">{studySpaceRows.map(renderRow)}</div>
+        </section>
+      )}
+
+      {classroomRows.length > 0 && (
+        <section>
+          <SectionHeader>Classrooms</SectionHeader>
+          <div className="[&>*:last-child]:border-b-0">{classroomRows.map(renderRow)}</div>
+        </section>
+      )}
     </div>
   );
 }

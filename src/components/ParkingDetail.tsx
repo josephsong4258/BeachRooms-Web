@@ -51,7 +51,9 @@ function AccessNote({ lot, open }: { lot: ParkingLot; open: boolean }) {
   const countdown = h > 0 ? `${h}h ${m}m` : `${m}m`;
   return (
     <p className="text-[13px] text-muted-foreground">
-      Employee parking only. Opens to students in{' '}
+      Employee parking only.
+      <br />
+      Opens to students in{' '}
       <span className="font-semibold text-foreground">{countdown}</span> (5:30 PM).
     </p>
   );
@@ -134,7 +136,7 @@ export default function ParkingDetail({ lot, onBack }: ParkingDetailProps) {
             table="place_comments"
             column="place_id"
             subjectId={placeId}
-            placeholder="Share tips/comments: how full does this lot get, best times etc"
+            placeholder="Share tips/comments: how full does this lot get, best times to park here, etc"
           />
         </div>
       </ScrollArea>

@@ -13,9 +13,10 @@ import type {
 
 // Schedules only change when the scraper re-runs, so the data fetches are
 // cached. The pipeline busts the cache via /api/revalidate after each run;
-// the hourly revalidate is just a fallback. Availability is still computed
-// per-request from the cached rows.
-const CACHE_SECONDS = 3600;
+// this time-based revalidate is just a fallback. Schedules rarely change
+// within a semester, so a weekly fallback is plenty. Availability is still
+// computed per-request from the cached rows.
+const CACHE_SECONDS = 60 * 60 * 24 * 7; // 7 days
 
 // Only the columns the app uses — the table also stores course_title,
 // instructor_name, and created_at, which would otherwise be held in the
@@ -173,7 +174,13 @@ export async function GET(request: NextRequest) {
       currentClassEndsAt: avail.currentClassEndsAt ? toCampusWallClockString(avail.currentClassEndsAt) : null,
       minutesUntilNextClass: avail.minutesUntilNextClass,
       availableDurationMinutes: avail.availableDurationMinutes,
-      todaySchedules: roomSchedules,
+      // Ship only the fields the UI renders — see RoomSchedule. Drops two UUIDs
+      // plus day_of_week/semester per class from every room in the payload.
+      todaySchedules: roomSchedules.map((s) => ({
+        start_time: s.start_time,
+        end_time: s.end_time,
+        course_code: s.course_code,
+      })),
     };
 
     bd.rooms.push(room);

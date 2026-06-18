@@ -261,7 +261,7 @@ export default function RoomDetail({ room, building, onBack, isMobile = false }:
                   const ended = eh * 60 + em <= nowMinutes;
                   return (
                     <div
-                      key={s.id}
+                      key={`${s.start_time}-${s.end_time}-${s.course_code ?? ''}`}
                       className="flex items-center justify-between rounded-md bg-muted/50 px-3 py-2 text-sm"
                       style={ended ? { opacity: 0.4 } : undefined}
                     >
