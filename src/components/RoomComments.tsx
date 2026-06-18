@@ -11,7 +11,7 @@ export default function RoomComments({ roomId }: RoomCommentsProps) {
       table="comments"
       column="classroom_id"
       subjectId={roomId}
-      placeholder="Leave a tip or critique: Was the room open? Noise, outlets, seats, desk sizes, etc"
+      placeholder="Leave a comment or critique: Was the room open? Noise, outlets, seats, comfort, etc"
     />
   );
 }

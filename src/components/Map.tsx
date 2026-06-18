@@ -20,6 +20,13 @@ const CSULB_BOUNDS: [[number, number], [number, number]] = [
   [-118.122, 33.776], // SW [lng, lat]
   [-118.106, 33.792], // NE [lng, lat]
 ];
+// On mobile the bottom sheet covers the lower half of the map, so the southern
+// bound is pushed further south — otherwise the bottommost buildings can never
+// be panned up out from behind the sheet.
+const CSULB_BOUNDS_MOBILE: [[number, number], [number, number]] = [
+  [-118.122, 33.768], // SW [lng, lat] — extended ~0.008° south
+  [-118.106, 33.792], // NE [lng, lat]
+];
 const DEFAULT_STYLE = 'mapbox://styles/josephsong23/cmip4pzo400e501st3fdjay4h';
 
 // Per-building label placement overrides (default: below the pin), for spots
@@ -310,7 +317,7 @@ export default function Map({
       bearing: INITIAL_BEARING,
       minZoom: MIN_ZOOM,
       maxZoom: MAX_ZOOM,
-      maxBounds: CSULB_BOUNDS,
+      maxBounds: isMobile ? CSULB_BOUNDS_MOBILE : CSULB_BOUNDS,
     });
 
     map.current.addControl(new mapboxgl.NavigationControl({ visualizePitch: true }), 'bottom-right');
@@ -597,6 +604,9 @@ export default function Map({
       parkingChips.current = [];
       onMapReadyCalled.current = false;
     };
+    // Init runs once: it reads isMobile at mount for the initial zoom/bounds,
+    // and the breakpoint effect below keeps maxBounds in sync after that.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onMapReady, updateBuildingPins]);
 
   // Reconcile markers whenever buildings changes
@@ -610,6 +620,7 @@ export default function Map({
     isMobileRef.current = isMobile;
     updateBuildingPins();
     applyPinScaleRef.current?.();
+    map.current?.setMaxBounds(isMobile ? CSULB_BOUNDS_MOBILE : CSULB_BOUNDS);
   }, [isMobile, updateBuildingPins]);
 
   // Fly to a building when asked (auto-center setting)

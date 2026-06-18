@@ -3,12 +3,7 @@ import { SlidersHorizontal, HelpCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Switch } from '@/components/ui/switch';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+import InfoPopover from '@/components/InfoPopover';
 
 export interface RoomFilters {
   groupStudyOnly: boolean;
@@ -94,24 +89,20 @@ export default function FilterMenu({ filters, onChange }: FilterMenuProps) {
         <div className="flex items-center justify-between gap-3">
           <span className="flex items-center gap-1.5 text-sm font-medium">
             Group study rooms
-            <TooltipProvider delayDuration={100}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    aria-label="What are group study rooms?"
-                    className="text-muted-foreground/70 hover:text-muted-foreground"
-                  >
-                    <HelpCircle className="h-3.5 w-3.5" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="top" className="max-w-[220px]">
-                  <p className="text-xs">Classrooms designed for group work, with movable seating and
-                    collaborative layouts.
-                  </p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            <InfoPopover
+              trigger={
+                <button
+                  type="button"
+                  aria-label="What are group study rooms?"
+                  className="text-muted-foreground/70 hover:text-muted-foreground"
+                >
+                  <HelpCircle className="h-3.5 w-3.5" />
+                </button>
+              }
+            >
+              Classrooms designed for group work, with movable seating and
+              collaborative layouts.
+            </InfoPopover>
           </span>
           <Switch
             checked={filters.groupStudyOnly}

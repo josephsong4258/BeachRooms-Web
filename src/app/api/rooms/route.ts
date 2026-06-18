@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { unstable_cache } from 'next/cache';
 import { supabase } from '@/lib/supabase';
-import { calculateAvailability, campusNow } from '@/lib/availability';
+import { calculateAvailability, campusNow, toCampusWallClockString } from '@/lib/availability';
 import { ROOMS_CACHE_TAG } from '@/lib/cache';
 import type {
   ClassroomWithBuilding,
@@ -13,9 +13,10 @@ import type {
 
 // Schedules only change when the scraper re-runs, so the data fetches are
 // cached. The pipeline busts the cache via /api/revalidate after each run;
-// the hourly revalidate is just a fallback. Availability is still computed
-// per-request from the cached rows.
-const CACHE_SECONDS = 3600;
+// this time-based revalidate is just a fallback. Schedules rarely change
+// within a semester, so a weekly fallback is plenty. Availability is still
+// computed per-request from the cached rows.
+const CACHE_SECONDS = 60 * 60 * 24 * 7; // 7 days
 
 // Only the columns the app uses — the table also stores course_title,
 // instructor_name, and created_at, which would otherwise be held in the
@@ -76,6 +77,22 @@ const getSchedulesForDay = unstable_cache(
   { revalidate: CACHE_SECONDS, tags: [ROOMS_CACHE_TAG] }
 );
 
+// The scraper emits one row per section, so cross-listed or multi-instructor
+// classes that share a room/time appear as several identical blocks. They're a
+// single physical occupancy, so collapse to one per (course, start, end) before
+// it reaches availability math and the UI.
+function dedupeSchedules(schedules: ClassSchedule[]): ClassSchedule[] {
+  const seen = new Set<string>();
+  const out: ClassSchedule[] = [];
+  for (const s of schedules) {
+    const key = `${s.course_code ?? ''}|${s.start_time}|${s.end_time}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(s);
+  }
+  return out;
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const dateParam = searchParams.get('date');
@@ -121,7 +138,7 @@ export async function GET(request: NextRequest) {
     if (cw.building.code === 'OFF') continue;
 
     const { building } = cw;
-    const roomSchedules = schedulesByRoom.get(cw.id) ?? [];
+    const roomSchedules = dedupeSchedules(schedulesByRoom.get(cw.id) ?? []);
     const avail = calculateAvailability(cw, roomSchedules, queryTime);
 
     if (!buildingsMap[building.id]) {
@@ -153,11 +170,17 @@ export async function GET(request: NextRequest) {
       isAvailable: avail.isAvailable,
       isBuildingOpen: avail.isBuildingOpen,
       statusText: avail.statusText,
-      nextClassStartsAt: avail.nextClassStartsAt?.toISOString() ?? null,
-      currentClassEndsAt: avail.currentClassEndsAt?.toISOString() ?? null,
+      nextClassStartsAt: avail.nextClassStartsAt ? toCampusWallClockString(avail.nextClassStartsAt) : null,
+      currentClassEndsAt: avail.currentClassEndsAt ? toCampusWallClockString(avail.currentClassEndsAt) : null,
       minutesUntilNextClass: avail.minutesUntilNextClass,
       availableDurationMinutes: avail.availableDurationMinutes,
-      todaySchedules: roomSchedules,
+      // Ship only the fields the UI renders — see RoomSchedule. Drops two UUIDs
+      // plus day_of_week/semester per class from every room in the payload.
+      todaySchedules: roomSchedules.map((s) => ({
+        start_time: s.start_time,
+        end_time: s.end_time,
+        course_code: s.course_code,
+      })),
     };
 
     bd.rooms.push(room);

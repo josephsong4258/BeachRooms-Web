@@ -28,10 +28,12 @@ REQUEST_DELAY = 1.0  # seconds between page fetches
 DEFAULT_CAPACITY = 30  # schedule pages don't include room capacity
 
 # Fixed building hours — schedule pages don't list hours, so assume every
-# building is open 8:00 AM to 10:00 PM on weekdays (weekends treated as closed
-# by the app regardless of these values).
+# building is open 8:00 AM to 9:00 PM on weekdays (weekends treated as closed
+# by the app regardless of these values). Buildings that host later evening
+# classes are bumped to 10 PM via per-building overrides in
+# src/lib/building-hours.ts.
 BUILDING_OPEN = "08:00:00"
-BUILDING_CLOSE = "22:00:00"
+BUILDING_CLOSE = "21:00:00"
 
 # Locations to skip — not real buildings/classrooms
 SKIP_LOCATIONS = {"ONLINE-ONLY", "OFF-CAMP", "TBA", "NA", ""}
@@ -208,13 +210,18 @@ def process_sections(supabase_client, sections: list[dict], dry_run: bool = Fals
     """
     LAST STEP: Process the parsed sections and insert them into the database.
 
-    Returns (inserted_count, skipped_count).
+    Returns (inserted_count, skipped_count, duplicate_count).
     """
     buildings_cache: dict[str, str] = {}  # code -> uuid
     classrooms_cache: dict[tuple[str, str], str] = {}  # (code, room) -> uuid
     schedule_batch: list[dict] = []
     inserted_count = 0
     skipped_count = 0
+    # Collapse duplicate sections that share a room, day, and time — cross-listed
+    # or multi-instructor classes scrape as several identical rows but are one
+    # physical occupancy. Mirrors dedupeSchedules in src/app/api/rooms/route.ts.
+    seen_schedule_keys: set[tuple] = set()
+    duplicate_count = 0
 
     for section in sections:
         location = section["location"]
@@ -247,16 +254,28 @@ def process_sections(supabase_client, sections: list[dict], dry_run: bool = Fals
         if dry_run:
             # Still validate parsing works
             try:
-                parse_days(days_str)
-                parse_time_range(time_str)
+                day_indices = parse_days(days_str)
+                start_time, end_time = parse_time_range(time_str)
             except ValueError as e:
                 print(f"  WARN: parse error: {e} (section: {section})")
                 skipped_count += 1
                 continue
 
-            # Count what would be inserted
-            day_count = len(parse_days(days_str))
-            inserted_count += day_count
+            # Count what would be inserted, skipping duplicates
+            for day in day_indices:
+                key = (
+                    building_code,
+                    room_number,
+                    day,
+                    start_time.isoformat(),
+                    end_time.isoformat(),
+                    section["course_code"],
+                )
+                if key in seen_schedule_keys:
+                    duplicate_count += 1
+                    continue
+                seen_schedule_keys.add(key)
+                inserted_count += 1
             # Track buildings/classrooms for stats
             buildings_cache[building_code] = "dry-run"
             classrooms_cache[(building_code, room_number)] = "dry-run"
@@ -313,8 +332,21 @@ def process_sections(supabase_client, sections: list[dict], dry_run: bool = Fals
             skipped_count += 1
             continue
 
-        # Add schedule rows to batch (one per day)
+        # Add schedule rows to batch (one per day), skipping duplicate sections
+        # that share a room, day, and time
         for day in day_indices:
+            key = (
+                building_code,
+                room_number,
+                day,
+                start_time.isoformat(),
+                end_time.isoformat(),
+                section["course_code"],
+            )
+            if key in seen_schedule_keys:
+                duplicate_count += 1
+                continue
+            seen_schedule_keys.add(key)
             schedule_batch.append(
                 {
                     "classroom_id": classroom_id,
@@ -338,7 +370,7 @@ def process_sections(supabase_client, sections: list[dict], dry_run: bool = Fals
     if schedule_batch and not dry_run:
         supabase_client.table("class_schedules").insert(schedule_batch).execute()
 
-    return inserted_count, skipped_count
+    return inserted_count, skipped_count, duplicate_count
 
 
 def request_revalidation():
@@ -419,7 +451,7 @@ def main():
         supabase_client.table("class_schedules").delete().gte("created_at", "1970-01-01").execute()
 
     # Process the parsed sections and insert them into supabase
-    inserted, skipped = process_sections(
+    inserted, skipped, duplicates = process_sections(
         supabase_client, all_sections, dry_run=args.dry_run
     )
 
@@ -428,6 +460,7 @@ def main():
 
     print(f"\nDone!")
     print(f"  Schedule rows {'would insert' if args.dry_run else 'inserted'}: {inserted}")
+    print(f"  Duplicate sections collapsed (same room/day/time): {duplicates}")
     print(f"  Sections skipped (online/TBA/unknown): {skipped}")
 
 

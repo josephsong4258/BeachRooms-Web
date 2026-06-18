@@ -9,13 +9,27 @@ import type { BuildingWithRooms, RoomAvailability } from '@/types';
 
 export const OPENING_SOON_MINUTES = 30;
 
+// A free gap shorter than this isn't worth walking to — a room that opens for
+// only a few minutes before the next class is effectively still occupied.
+// Mirrors MIN_USABLE_MINUTES in lib/availability.ts, which already excludes
+// such gaps from the detail page's "Free at …" calculation.
+const MIN_USABLE_MINUTES = 30;
+
 export type RoomGroup = 'available' | 'openingSoon' | 'occupied';
 
 export function classifyRoom(room: RoomAvailability, now: number): RoomGroup {
   if (room.isAvailable) return 'available';
   if (room.status === 'in_use' && room.currentClassEndsAt) {
-    const minutes = Math.floor((new Date(room.currentClassEndsAt).getTime() - now) / 60000);
-    if (minutes > 0 && minutes <= OPENING_SOON_MINUTES) return 'openingSoon';
+    const endsAt = new Date(room.currentClassEndsAt).getTime();
+    const minutes = Math.floor((endsAt - now) / 60000);
+    // Only "opening soon" if the room is then usably free — i.e. not re-occupied
+    // by the next class within MIN_USABLE_MINUTES. Otherwise the list would say
+    // "Free in 5 min" while the detail page (correctly) says the next real
+    // opening is hours away.
+    const nextStart = room.nextClassStartsAt ? new Date(room.nextClassStartsAt).getTime() : null;
+    const usableGap =
+      nextStart === null || Math.floor((nextStart - endsAt) / 60000) >= MIN_USABLE_MINUTES;
+    if (minutes > 0 && minutes <= OPENING_SOON_MINUTES && usableGap) return 'openingSoon';
   }
   return 'occupied';
 }

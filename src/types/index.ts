@@ -41,6 +41,16 @@ export interface ClassroomWithBuilding extends Classroom {
   building: Building;
 }
 
+// The subset of a class schedule the client actually renders. The full
+// ClassSchedule also carries id/classroom_id (36-char UUIDs), day_of_week, and
+// semester, none of which the UI reads — they're dropped before serialization
+// to keep the per-request payload (and Vercel egress) small at scale.
+export interface RoomSchedule {
+  start_time: string;
+  end_time: string;
+  course_code: string | null;
+}
+
 export interface ClassroomAvailability {
   classroom: ClassroomWithBuilding;
   isAvailable: boolean;
@@ -70,7 +80,7 @@ export interface RoomAvailability {
   currentClassEndsAt: string | null;
   minutesUntilNextClass: number | null;
   availableDurationMinutes: number | null;
-  todaySchedules: ClassSchedule[];
+  todaySchedules: RoomSchedule[];
 }
 
 export interface BuildingWithRooms {

@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button';
 import SignInDialog from '@/components/SignInDialog';
 import { supabase } from '@/lib/supabase';
 import { useUser } from '@/lib/use-auth';
-import { useProfile } from '@/lib/use-profile';
 
 const MAX_LENGTH = 500;
 
@@ -53,7 +52,6 @@ function Avatar({ name }: { name: string }) {
 // parking lots, and library floors share one implementation.
 export default function Comments({ table, column, subjectId, placeholder }: CommentsProps) {
   const { user, loading: authLoading } = useUser();
-  const { handle } = useProfile();
   const [draft, setDraft] = useState('');
   const [showSignIn, setShowSignIn] = useState(false);
   const queryClient = useQueryClient();
@@ -111,12 +109,6 @@ export default function Comments({ table, column, subjectId, placeholder }: Comm
         }}
         className="mb-3 space-y-2"
       >
-        {user && (
-          <p className="text-xs text-muted-foreground">
-            Commenting as{' '}
-            <span className="font-medium text-foreground/80">{handle ?? '…'}</span>
-          </p>
-        )}
         <textarea
           value={draft}
           onChange={(e) => setDraft(e.target.value.slice(0, MAX_LENGTH))}

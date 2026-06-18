@@ -1,8 +1,9 @@
-// Per-building hour overrides for cases the scraper's flat "weekday 8am–10pm,
+// Per-building hour overrides for cases the scraper's flat "weekday 8am–9pm,
 // weekends closed" assumption can't express — e.g. a building that's closed on
-// Fridays or closes earlier during the summer. Overrides are date-bounded so
-// they only apply during the relevant term and revert to the stored hours
-// outside that window.
+// Fridays, closes earlier during the summer, or stays open to 10pm because it
+// hosts evening classes that run past the 9pm default. Overrides are
+// date-bounded so they only apply during the relevant term and revert to the
+// stored hours outside that window.
 //
 // This module is pure (no server-only deps), so it's the single source of
 // truth shared by the server availability engine and the client UI.
@@ -20,6 +21,12 @@ interface HoursOverride {
 }
 
 const SUMMER_8_5: DayHours = { open: '08:00:00', close: '17:00:00' };
+// Weekdays 8 AM–10 PM, for buildings that host Summer 2026 evening classes
+// running past the conservative 9 PM default and so are open until 10 PM.
+const SUMMER_8_10: DayHours = { open: '08:00:00', close: '22:00:00' };
+const LATE_EVENING_BUILDINGS_SUMMER_2026 = [
+  'AS', 'COB', 'CPCE', 'EED', 'ET', 'KIN', 'LA1', 'LA2', 'SPA', 'VEC',
+];
 
 const BUILDING_HOURS_OVERRIDES: Record<string, HoursOverride[]> = {
   // Horn Center — Summer 2026: Mon–Thu 8 AM–5 PM, Fri–Sun closed.
@@ -48,6 +55,18 @@ const BUILDING_HOURS_OVERRIDES: Record<string, HoursOverride[]> = {
     },
   ],
 };
+
+// Buildings with at least one Summer 2026 class ending after 9 PM stay open to
+// 10 PM on weekdays for the term (closed weekends), instead of the 9 PM default.
+for (const code of LATE_EVENING_BUILDINGS_SUMMER_2026) {
+  BUILDING_HOURS_OVERRIDES[code] = [
+    {
+      start: '2026-05-18',
+      end: '2026-08-24',
+      days: [null, SUMMER_8_10, SUMMER_8_10, SUMMER_8_10, SUMMER_8_10, SUMMER_8_10, null],
+    },
+  ];
+}
 
 // `date`'s campus-local calendar day as "YYYY-MM-DD". Callers pass a Date whose
 // local fields already hold campus wall-clock time (as availability.ts does).
