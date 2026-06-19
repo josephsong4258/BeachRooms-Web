@@ -38,7 +38,12 @@ export default function LibraryDetail({ onBack, onOpenFloor }: LibraryDetailProp
         </div>
       </div>
 
-      <ScrollArea className="flex-1">
+      {/* Radix wraps the viewport content in a `display:table; min-width:100%`
+          div, which sizes to its widest child. The 4th-floor `truncate` note
+          (white-space:nowrap) would otherwise force that table — and the w-full
+          hero — wider than the column, clipping the right edge. Forcing the
+          wrapper to `block` makes it fill the width and lets truncate work. */}
+      <ScrollArea className="flex-1 [&_[data-radix-scroll-area-viewport]>div]:!block">
         {/* Photo hero */}
         <div className="relative h-[210px] w-full shrink-0 overflow-hidden bg-muted">
           <Image

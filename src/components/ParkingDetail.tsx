@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import Image from 'next/image';
-import { ArrowLeft, Car } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import Rating from '@/components/Rating';
@@ -74,8 +74,7 @@ export default function ParkingDetail({ lot, onBack }: ParkingDetailProps) {
         </Button>
         <div className="min-w-0 flex-1">
           <h2 className="truncate text-base font-semibold">{lot.name}</h2>
-          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Car className="h-3.5 w-3.5" />
+          <p className="text-xs text-muted-foreground">
             {isStudent ? 'Student parking' : 'Employee parking'}
           </p>
         </div>

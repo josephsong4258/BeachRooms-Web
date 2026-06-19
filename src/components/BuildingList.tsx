@@ -7,6 +7,7 @@ import {
   FavoriteStar,
   RoomRow,
 } from '@/components/building-shared';
+import { buildingStudySpots } from '@/data/study-spots';
 import type { BuildingWithRooms, RoomAvailability } from '@/types';
 
 // The University Library is a "special place" (no scraped rooms, so it's not in
@@ -61,7 +62,7 @@ function BuildingNavRow({
   const available = rooms.filter((r) => r.isAvailable).length;
 
   return (
-    <div className="flex w-full items-center border-b border-border/60 py-2 pr-1 transition-colors hover:bg-accent/40">
+    <div className="flex w-full items-center border-b border-border/60 py-2 transition-colors hover:bg-accent/40">
       <FavoriteStar
         active={isFavorite}
         onToggle={onToggleFavorite}
@@ -87,7 +88,7 @@ function BuildingNavRow({
 // stands in for the room-count badge, and it navigates to the library page.
 function LibraryNavRow({ entry }: { entry: LibraryEntry }) {
   return (
-    <div className="flex w-full items-center border-b border-border/60 py-2 pr-1 transition-colors hover:bg-accent/40">
+    <div className="flex w-full items-center border-b border-border/60 py-2 transition-colors hover:bg-accent/40">
       <FavoriteStar
         active={entry.isFavorite}
         onToggle={entry.onToggleFavorite}
@@ -121,6 +122,12 @@ function SectionHeader({ children }: { children: React.ReactNode }) {
       {children}
     </h2>
   );
+}
+
+// A hairline like the row separators, but darker, to set favorited rooms apart
+// from favorited buildings.
+function SectionPartition() {
+  return <div className="h-px bg-muted-foreground/20" aria-hidden="true" />;
 }
 
 // One alphabetical stream of building + library rows; the library carries its
@@ -170,12 +177,16 @@ function BuildingList({
   const byName = (a: NavRow, b: NavRow) => a.name.localeCompare(b.name);
 
   // Favorited rows move to the Favorites section rather than appearing twice.
-  // The rest split by kind: the library (and any future special place) is an
-  // "Official Study Space"; scraped buildings are "Classrooms".
+  // The rest split into "Official Study Spaces" vs. "Classrooms": the library is
+  // always an official space, as is any scraped building with curated study
+  // areas (e.g. the Horn Center — see buildingStudySpots). Everything else is a
+  // classroom building.
+  const isStudySpace = (r: NavRow) =>
+    r.kind === 'library' || buildingStudySpots(r.building.code).length > 0;
   const favoriteRows = showFavorites ? allRows.filter(isRowFavorite).sort(byName) : [];
   const remainingRows = showFavorites ? allRows.filter((r) => !isRowFavorite(r)) : allRows;
-  const studySpaceRows = remainingRows.filter((r) => r.kind === 'library').sort(byName);
-  const classroomRows = remainingRows.filter((r) => r.kind === 'building').sort(byName);
+  const studySpaceRows = remainingRows.filter(isStudySpace).sort(byName);
+  const classroomRows = remainingRows.filter((r) => !isStudySpace(r)).sort(byName);
   const hasFavorites = favoriteRooms.length > 0 || favoriteRows.length > 0;
 
   const renderRow = (r: NavRow) =>
@@ -210,20 +221,27 @@ function BuildingList({
       {hasFavorites && (
         <section>
           <SectionHeader>Favorites</SectionHeader>
-          <div className="[&>*:last-child]:border-b-0">
-            {favoriteRooms.map(({ room, building }) => (
-              <RoomRow
-                key={`fav-${room.id}`}
-                room={room}
-                type={classifyRoom(room, now)}
-                buildingCode={building.code}
-                onClick={() => onRoomClick(room, building)}
-                isFavorite
-                onToggleFavorite={() => onToggleFavoriteRoom(room.id)}
-              />
-            ))}
-            {favoriteRows.map(renderRow)}
-          </div>
+          {favoriteRooms.length > 0 && (
+            <div className="[&>*:last-child]:border-b-0">
+              {favoriteRooms.map(({ room, building }) => (
+                <RoomRow
+                  key={`fav-${room.id}`}
+                  room={room}
+                  type={classifyRoom(room, now)}
+                  buildingCode={building.code}
+                  onClick={() => onRoomClick(room, building)}
+                  isFavorite
+                  onToggleFavorite={() => onToggleFavoriteRoom(room.id)}
+                />
+              ))}
+            </div>
+          )}
+          {/* A heavier break sets the favorited rooms apart from favorited
+              buildings, which read differently (count badge vs. live status). */}
+          {favoriteRooms.length > 0 && favoriteRows.length > 0 && <SectionPartition />}
+          {favoriteRows.length > 0 && (
+            <div className="[&>*:last-child]:border-b-0">{favoriteRows.map(renderRow)}</div>
+          )}
         </section>
       )}
 
