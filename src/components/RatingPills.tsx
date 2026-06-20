@@ -11,6 +11,9 @@ interface RatingPillsProps {
   onVote: (positive: boolean) => void;
   /** Prompt shown beside the pills. */
   question?: string;
+  /** Override the prompt's classes, e.g. a smaller, non-wrapping size for a
+      long question that would otherwise wrap. Defaults to `text-sm font-medium`. */
+  questionClassName?: string;
 }
 
 const pillBase =
@@ -25,10 +28,11 @@ export default function RatingPills({
   vote,
   onVote,
   question = 'Was the room free?',
+  questionClassName = 'text-sm font-medium',
 }: RatingPillsProps) {
   return (
     <div className="flex items-center justify-between gap-3 rounded-lg bg-muted/50 px-4 py-3">
-      <p className="text-sm font-medium">{question}</p>
+      <p className={questionClassName}>{question}</p>
       <div className="flex shrink-0 gap-1.5">
         <button
           onClick={() => onVote(true)}

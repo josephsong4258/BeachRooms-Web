@@ -31,15 +31,13 @@ function StatusPill({ open, isStudent }: { open: boolean; isStudent: boolean }) 
   );
 }
 
-// Human-readable note about who can park here and when, mirroring the map popup.
-function AccessNote({ lot, open }: { lot: ParkingLot; open: boolean }) {
-  if (lot.type === 'student') {
-    return <p className="text-[13px] text-muted-foreground">Open to all students.</p>;
-  }
+// Human-readable note about when an employee lot opens to students, mirroring
+// the map popup. Student lots need no note (they're always open to permits).
+function AccessNote({ open }: { open: boolean }) {
   if (open) {
     return (
       <p className="text-[13px] text-muted-foreground">
-        Employee lot — open to students now (after 5:30 PM weekdays and all weekend).
+        Employee lot. Open to students now (after 5:30 PM weekdays and all weekend).
       </p>
     );
   }
@@ -116,10 +114,12 @@ export default function ParkingDetail({ lot, onBack }: ParkingDetailProps) {
         </div>
 
         <div className="space-y-5 p-4">
-          {/* Access note */}
-          <div className="rounded-lg bg-muted/50 px-4 py-3">
-            <AccessNote lot={lot} open={open} />
-          </div>
+          {/* Access note: employee lots only; student lots are always open. */}
+          {!isStudent && (
+            <div className="rounded-lg bg-muted/50 px-4 py-3">
+              <AccessNote open={open} />
+            </div>
+          )}
 
           {/* Rating */}
           <Rating
@@ -127,6 +127,10 @@ export default function ParkingDetail({ lot, onBack }: ParkingDetailProps) {
             column="place_id"
             subjectId={placeId}
             question={isStudent ? 'Could you find parking here?' : 'Could you find parking here after 5:30?'}
+            // The employee-lot prompt is long; shrink it so it stays on one line.
+            questionClassName={
+              isStudent ? undefined : 'text-xs font-medium whitespace-nowrap'
+            }
             onRequireSignIn={() => setShowSignIn(true)}
           />
 

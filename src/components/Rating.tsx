@@ -16,12 +16,15 @@ interface RatingProps {
   column: 'classroom_id' | 'place_id';
   subjectId: string;
   question: string;
+  // Optional override for the question's text classes (e.g. a smaller size so a
+  // long prompt fits on one line).
+  questionClassName?: string;
   onRequireSignIn: () => void;
 }
 
 // Crowdsourced thumbs bar, generalized over the rating table so rooms, parking
 // lots, and library floors share one implementation.
-export default function Rating({ table, column, subjectId, question, onRequireSignIn }: RatingProps) {
+export default function Rating({ table, column, subjectId, question, questionClassName, onRequireSignIn }: RatingProps) {
   const { user } = useUser();
   const queryClient = useQueryClient();
   const queryKey = [table, subjectId];
@@ -89,6 +92,13 @@ export default function Rating({ table, column, subjectId, question, onRequireSi
   }
 
   return (
-    <RatingPills up={upCount} down={downCount} vote={myVote} onVote={handleVote} question={question} />
+    <RatingPills
+      up={upCount}
+      down={downCount}
+      vote={myVote}
+      onVote={handleVote}
+      question={question}
+      questionClassName={questionClassName}
+    />
   );
 }

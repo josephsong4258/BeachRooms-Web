@@ -179,7 +179,7 @@ function BuildingList({
   // Favorited rows move to the Favorites section rather than appearing twice.
   // The rest split into "Official Study Spaces" vs. "Classrooms": the library is
   // always an official space, as is any scraped building with curated study
-  // areas (e.g. the Horn Center — see buildingStudySpots). Everything else is a
+  // areas (e.g. the Horn Center, see buildingStudySpots). Everything else is a
   // classroom building.
   const isStudySpace = (r: NavRow) =>
     r.kind === 'library' || buildingStudySpots(r.building.code).length > 0;
