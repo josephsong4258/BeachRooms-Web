@@ -5,7 +5,7 @@ import { signInWithProvider } from '@/lib/use-auth';
 
 // Google's multicolor "G" mark, inlined so the button needs no asset or network
 // request. Sized to match the button text.
-function GoogleLogo() {
+export function GoogleLogo() {
   return (
     <svg viewBox="0 0 18 18" className="h-[18px] w-[18px]" aria-hidden="true">
       <path

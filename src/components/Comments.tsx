@@ -1,9 +1,10 @@
 'use client';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Trash2 } from 'lucide-react';
+import { Trash2, ChevronUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import SignInDialog from '@/components/SignInDialog';
+import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import { useUser } from '@/lib/use-auth';
 
@@ -15,7 +16,16 @@ interface CommentRow {
   content: string;
   created_at: string;
   profile: { display_name: string } | null;
+  // One row per upvote; length is the count, presence of the current user is
+  // "did I upvote".
+  votes: { user_id: string }[];
 }
+
+// The two comment tables each have their own votes table + FK column.
+const VOTES = {
+  comments: { table: 'comment_votes', column: 'comment_id' },
+  place_comments: { table: 'place_comment_votes', column: 'place_comment_id' },
+} as const;
 
 interface CommentsProps {
   // Which comments table + key column (comments/classroom_id or
@@ -56,17 +66,25 @@ export default function Comments({ table, column, subjectId, placeholder }: Comm
   const [showSignIn, setShowSignIn] = useState(false);
   const queryClient = useQueryClient();
   const queryKey = [table, subjectId];
+  const votes = VOTES[table];
 
   const { data: comments, isLoading, error } = useQuery({
     queryKey,
     queryFn: async (): Promise<CommentRow[]> => {
       const { data, error } = await supabase
         .from(table)
-        .select(`id, user_id, content, created_at, profile:profiles(display_name)`)
+        .select(
+          `id, user_id, content, created_at, profile:profiles(display_name), votes:${votes.table}(user_id)`
+        )
         .eq(column, subjectId)
         .order('created_at', { ascending: false });
       if (error) throw new Error(error.message);
-      return data as unknown as CommentRow[];
+      // Most-upvoted first, newest as the tiebreak (rows already arrive
+      // created_at desc). Sorted once on fetch so live voting doesn't make
+      // rows jump around mid-interaction — order settles on the next refetch.
+      return (data as unknown as CommentRow[]).sort(
+        (a, b) => b.votes.length - a.votes.length
+      );
     },
   });
 
@@ -92,6 +110,55 @@ export default function Comments({ table, column, subjectId, placeholder }: Comm
     },
     onSuccess: invalidate,
   });
+
+  const toggleVote = useMutation({
+    mutationFn: async ({ commentId, voted }: { commentId: string; voted: boolean }) => {
+      if (voted) {
+        const { error } = await supabase
+          .from(votes.table)
+          .delete()
+          .eq(votes.column, commentId)
+          .eq('user_id', user!.id);
+        if (error) throw new Error(error.message);
+      } else {
+        const { error } = await supabase
+          .from(votes.table)
+          .insert({ [votes.column]: commentId, user_id: user!.id });
+        // 23505 = unique violation: already upvoted in another tab — fine
+        if (error && error.code !== '23505') throw new Error(error.message);
+      }
+    },
+    // Optimistic: flip just this comment's vote without reordering the list
+    onMutate: async ({ commentId, voted }) => {
+      await queryClient.cancelQueries({ queryKey });
+      const prev = queryClient.getQueryData<CommentRow[]>(queryKey);
+      queryClient.setQueryData<CommentRow[]>(queryKey, (rows = []) =>
+        rows.map((c) =>
+          c.id !== commentId
+            ? c
+            : {
+                ...c,
+                votes: voted
+                  ? c.votes.filter((v) => v.user_id !== user!.id)
+                  : [...c.votes, { user_id: user!.id }],
+              }
+        )
+      );
+      return { prev };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(queryKey, ctx.prev);
+    },
+    onSettled: invalidate,
+  });
+
+  function handleVote(c: CommentRow) {
+    if (!user) {
+      setShowSignIn(true);
+      return;
+    }
+    toggleVote.mutate({ commentId: c.id, voted: c.votes.some((v) => v.user_id === user.id) });
+  }
 
   const trimmed = draft.trim();
 
@@ -151,6 +218,8 @@ export default function Comments({ table, column, subjectId, placeholder }: Comm
         <div className="space-y-3">
           {comments.map((c) => {
             const name = c.profile?.display_name ?? 'Student';
+            const upvotes = c.votes.length;
+            const upvoted = !!user && c.votes.some((v) => v.user_id === user.id);
             return (
               <div key={c.id} className="flex gap-2.5">
                 <Avatar name={name} />
@@ -174,6 +243,20 @@ export default function Comments({ table, column, subjectId, placeholder }: Comm
                   <p className="whitespace-pre-wrap break-words text-sm text-foreground/90">
                     {c.content}
                   </p>
+                  <button
+                    onClick={() => handleVote(c)}
+                    aria-pressed={upvoted}
+                    aria-label={upvoted ? 'Remove upvote' : 'Upvote'}
+                    className={cn(
+                      'mt-1.5 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-colors',
+                      upvoted
+                        ? 'border-primary/30 bg-primary/10 text-primary'
+                        : 'border-input text-muted-foreground hover:text-foreground'
+                    )}
+                  >
+                    <ChevronUp className="h-3.5 w-3.5" />
+                    Helpful{upvotes > 0 ? ` · ${upvotes}` : ''}
+                  </button>
                 </div>
               </div>
             );

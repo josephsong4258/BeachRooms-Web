@@ -29,14 +29,14 @@ create table if not exists profiles (
 -- In case an earlier version of this script (which had avatars) already ran
 alter table profiles drop column if exists avatar_url;
 
--- Keep custom handles sane: trimmed, 3-24 chars, no URLs/symbols beyond the
--- few needed for the generated format. (Profanity isn't filtered — moderate
--- via the Supabase dashboard if needed.)
+-- Keep custom handles sane: trimmed, 3-24 chars, letters/numbers/spaces and
+-- the # used by the generated format only. (Profanity isn't filtered —
+-- moderate via the Supabase dashboard if needed.)
 alter table profiles drop constraint if exists profiles_display_name_check;
 alter table profiles add constraint profiles_display_name_check check (
     display_name = btrim(display_name)
     and char_length(display_name) between 3 and 24
-    and display_name ~ '^[A-Za-z0-9 #_.\-]+$'
+    and display_name ~ '^[A-Za-z0-9 #]+$'
 );
 
 create or replace function handle_new_user()

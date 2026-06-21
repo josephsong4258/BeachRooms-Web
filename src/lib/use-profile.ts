@@ -4,8 +4,8 @@ import { supabase } from '@/lib/supabase';
 import { useUser } from '@/lib/use-auth';
 
 // Mirrors the profiles_display_name_check constraint in the database
-export const HANDLE_PATTERN = /^[A-Za-z0-9 #_.-]{3,24}$/;
-export const HANDLE_RULES = '3-24 characters: letters, numbers, spaces, or # _ . -';
+export const HANDLE_PATTERN = /^[A-Za-z0-9 #]{3,24}$/;
+export const HANDLE_RULES = '3-24 characters: letters, numbers, spaces, or #';
 
 export function useProfile() {
   const { user } = useUser();

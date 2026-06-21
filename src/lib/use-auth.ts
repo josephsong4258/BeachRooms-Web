@@ -35,3 +35,22 @@ export function signInWithProvider(provider: OAuthProvider) {
 export function signOut() {
   return supabase.auth.signOut();
 }
+
+// Permanently delete the current account. The server route needs the
+// service-role key (can't run client-side), so we pass our access token for it
+// to verify, then sign out locally once the account is gone.
+export async function deleteAccount() {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('You are not signed in.');
+
+  const res = await fetch('/api/delete-account', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${session.access_token}` },
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? 'Could not delete account.');
+  }
+
+  await supabase.auth.signOut();
+}
