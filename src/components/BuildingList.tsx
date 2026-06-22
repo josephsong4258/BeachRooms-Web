@@ -221,6 +221,12 @@ function BuildingList({
       {hasFavorites && (
         <section>
           <SectionHeader>Favorites</SectionHeader>
+          {favoriteRows.length > 0 && (
+            <div className="[&>*:last-child]:border-b-0">{favoriteRows.map(renderRow)}</div>
+          )}
+          {/* A heavier break sets the favorited buildings apart from favorited
+              rooms, which read differently (count badge vs. live status). */}
+          {favoriteRows.length > 0 && favoriteRooms.length > 0 && <SectionPartition />}
           {favoriteRooms.length > 0 && (
             <div className="[&>*:last-child]:border-b-0">
               {favoriteRooms.map(({ room, building }) => (
@@ -235,12 +241,6 @@ function BuildingList({
                 />
               ))}
             </div>
-          )}
-          {/* A heavier break sets the favorited rooms apart from favorited
-              buildings, which read differently (count badge vs. live status). */}
-          {favoriteRooms.length > 0 && favoriteRows.length > 0 && <SectionPartition />}
-          {favoriteRows.length > 0 && (
-            <div className="[&>*:last-child]:border-b-0">{favoriteRows.map(renderRow)}</div>
           )}
         </section>
       )}
