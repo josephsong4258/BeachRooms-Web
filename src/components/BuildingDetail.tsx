@@ -57,7 +57,7 @@ function PhotoHero({
   if (!open) {
     pillCls = 'border-[#d4d4d8] bg-[#f4f4f5] text-[#6b7280]';
     pillDot = 'bg-[#6b7280]';
-    pillText = 'Closed';
+    pillText = building.closedForSemester ? 'Closed for summer' : 'Closed';
   } else if (hasRoomsOpen) {
     pillCls = 'border-[#7ee8a0] bg-[#e6f9ec] text-[#1a9e3f]';
     pillDot = 'bg-[#1a9e3f]';
@@ -181,7 +181,9 @@ export default function BuildingDetail({
         <div className="flex items-center gap-4 border-b px-4 py-3 text-[13px] text-muted-foreground">
           <span className="inline-flex items-center gap-1.5">
             <Calendar className="h-3.5 w-3.5" />
-            {todayHours ? (
+            {building.closedForSemester ? (
+              <span className="font-semibold text-foreground">Closed for summer</span>
+            ) : todayHours ? (
               <>
                 Open{' '}
                 <span className="font-semibold text-foreground">

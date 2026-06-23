@@ -159,6 +159,19 @@ export function nextOpening(
 }
 
 export function ClosedPanel({ building }: { building: BuildingWithRooms }) {
+  // Closed-for-summer buildings have no scheduled classes this term, so the
+  // weekday-hours-based nextOpening would be a misleading "opens tomorrow".
+  if (building.closedForSemester) {
+    return (
+      <div className="px-1 py-1">
+        <p className="text-[13px] font-medium text-foreground/80">Closed for the summer</p>
+        <p className="mt-0.5 text-[13px] text-muted-foreground">
+          No classes are scheduled here this term.
+        </p>
+      </div>
+    );
+  }
+
   const opening = nextOpening(building);
   return (
     <div className="px-1 py-1">

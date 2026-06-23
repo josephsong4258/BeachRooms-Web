@@ -35,17 +35,19 @@ const LABEL_PLACEMENT: Record<string, 'top' | 'right' | 'left'> = {
   ECS: 'top', // Engineering/Computer Science
   ET: 'top', // Engineering Technology
   HSD: 'top', // Human Services & Design
+  MHB: 'top', // Humanities
+  HHS1: 'top', // Health & Human Services 1
   SPA: 'right', // Social Science/Public Affairs
   EN2: 'left', // Engineering 2
   EN3: 'left', // Engineering 3
   FO2: 'right', // Faculty Office 2
   LH: 'right', // Lecture Hall 150-151
   CINE: 'right', // Cinematic Arts
-  LA1: 'right', // Liberal Arts 1
-  LA2: 'right', // Liberal Arts 2
-  LA3: 'right', // Liberal Arts 3
-  LA4: 'right', // Liberal Arts 4
-  LA5: 'right', // Liberal Arts 5
+  LA1: 'left', // Liberal Arts 1
+  LA2: 'left', // Liberal Arts 2
+  LA3: 'left', // Liberal Arts 3
+  LA4: 'left', // Liberal Arts 4
+  LA5: 'left', // Liberal Arts 5
 };
 
 export interface CenterTarget {
@@ -273,13 +275,8 @@ export default function Map({
       const b = buildingsRef.current.find((x) => x.id === buildingId);
       if (!m || !b) return;
       flyToBuilding(b.longitude, b.latitude);
-      // Closed-for-summer buildings have no rooms to show — just surface the
-      // popup (the only way to read its "closed" note on touch, where there's
-      // no hover) instead of opening an empty detail page.
-      if (b.closedForSemester) {
-        popup.current?.setLngLat([b.longitude, b.latitude]).setHTML(popupHtml(b)).addTo(m);
-        return;
-      }
+      // Closed-for-summer buildings have no rooms, but still open their page so
+      // the photo, location, and "closed for summer" status can be browsed.
       onBuildingClickRef.current(buildingId);
     });
     return el;

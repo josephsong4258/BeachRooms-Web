@@ -95,7 +95,7 @@
   top: 100%;
   left: 50%;
   transform: translateX(-50%);
-  margin-top: 1px;
+  margin-top: -2px;
   white-space: nowrap;
   font-size: var(--pin-font, 11px);
   font-weight: 700;
@@ -153,14 +153,14 @@
   top: auto;
   bottom: 100%;
   margin-top: 0;
-  margin-bottom: 1px;
+  margin-bottom: -2px;
 }
 
 .building-marker-label.label-right {
   top: 50%;
   left: 100%;
   margin-top: 0;
-  margin-left: 3px;
+  margin-left: 1px;
   transform: translateY(-50%);
 }
 
@@ -169,6 +169,6 @@
   left: auto;
   right: 100%;
   margin-top: 0;
-  margin-right: 3px;
+  margin-right: 1px;
   transform: translateY(-50%);
 }
