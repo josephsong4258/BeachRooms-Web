@@ -8,13 +8,12 @@ import type { BuildingWithRooms } from '@/types';
 
 const CSULB_CENTER: [number, number] = [-118.113603, 33.778675];
 const INITIAL_ZOOM = 17.20;
-// Mobile starts more zoomed in than before (16.0 crowded the pins together);
-// 16.6 spreads them out while still fitting the campus core in the viewport.
-const MOBILE_INITIAL_ZOOM = 16.6;
-// The bottom sheet covers the lower ~half of the map at rest, so mobile centers
-// on a point south of CSULB_CENTER — this lifts the campus core into the
-// visible upper half instead of hiding it behind the sheet.
-const MOBILE_CENTER: [number, number] = [-118.113603, 33.7762];
+// Mobile has its own starting camera (the bottom sheet covers the lower half of
+// the map, so it's framed tighter and shifted to keep the campus core visible).
+const MOBILE_INITIAL_ZOOM = 16.8;
+const MOBILE_INITIAL_PITCH = 57.56;
+const MOBILE_INITIAL_BEARING = 17.6;
+const MOBILE_CENTER: [number, number] = [-118.112988, 33.778226];
 // Pins/labels render smaller on mobile so they don't crowd the narrow viewport
 const MOBILE_PIN_SCALE = 0.7;
 const INITIAL_PITCH = 56.99;
@@ -331,8 +330,8 @@ export default function Map({
       style: process.env.NEXT_PUBLIC_MAPBOX_STYLE ?? DEFAULT_STYLE,
       center: isMobile ? MOBILE_CENTER : CSULB_CENTER,
       zoom: isMobile ? MOBILE_INITIAL_ZOOM : INITIAL_ZOOM,
-      pitch: INITIAL_PITCH,
-      bearing: INITIAL_BEARING,
+      pitch: isMobile ? MOBILE_INITIAL_PITCH : INITIAL_PITCH,
+      bearing: isMobile ? MOBILE_INITIAL_BEARING : INITIAL_BEARING,
       minZoom: MIN_ZOOM,
       maxZoom: MAX_ZOOM,
       maxBounds: isMobile ? CSULB_BOUNDS_MOBILE : CSULB_BOUNDS,
