@@ -1,6 +1,16 @@
 <svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="BeachRooms">
   <title>BeachRooms</title>
-  
-  <path d="M32 8 L12 52 L32 52 Z" fill="#3469c4"></path>
-  <path d="M32 8 L52 52 L32 52 Z" fill="#1b3a7d"></path>
+  <defs>
+    <linearGradient id="brPyrLeft" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#4a82de"></stop>
+      <stop offset="1" stop-color="#2f63bd"></stop>
+    </linearGradient>
+    <linearGradient id="brPyrRight" x1="1" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2a4f9e"></stop>
+      <stop offset="1" stop-color="#152e63"></stop>
+    </linearGradient>
+  </defs>
+  <path d="M32 6 L9 41 L32 55 Z" fill="url(#brPyrLeft)"></path>
+  <path d="M32 6 L55 41 L32 55 Z" fill="url(#brPyrRight)"></path>
+  <path d="M32 6 L32 55" stroke="#5a90e8" stroke-width="0.6" opacity="0.5"></path>
 </svg>

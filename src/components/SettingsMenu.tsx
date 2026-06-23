@@ -9,12 +9,7 @@ import { Switch } from '@/components/ui/switch';
 import { useUser, signInWithProvider, signOut } from '@/lib/use-auth';
 import { useProfile } from '@/lib/use-profile';
 import { GoogleLogo } from '@/components/SignInDialog';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+import InfoPopover from '@/components/InfoPopover';
 
 export interface AppSettings {
   showMap: boolean;
@@ -43,8 +38,8 @@ function SettingRow({
       <div className="flex items-center gap-1.5 min-w-0">
         <p className="text-sm font-medium">{label}</p>
         {help && (
-          <Tooltip>
-            <TooltipTrigger asChild>
+          <InfoPopover
+            trigger={
               <button
                 type="button"
                 aria-label={`What does ${label} do?`}
@@ -52,11 +47,10 @@ function SettingRow({
               >
                 <HelpCircle className="h-3.5 w-3.5" />
               </button>
-            </TooltipTrigger>
-            <TooltipContent side="top" className="max-w-[220px]">
-              <p className="text-xs">{help}</p>
-            </TooltipContent>
-          </Tooltip>
+            }
+          >
+            {help}
+          </InfoPopover>
         )}
       </div>
       <Switch checked={checked} onCheckedChange={onCheckedChange} aria-label={label} />
@@ -90,25 +84,23 @@ export default function SettingsMenu({ settings, onChange }: SettingsMenuProps) 
       </PopoverTrigger>
       <PopoverContent align="end" className="w-64 space-y-3">
         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Settings</p>
-        <TooltipProvider delayDuration={100}>
-          <SettingRow
-            label="Hide map"
-            checked={!settings.showMap}
-            onCheckedChange={(v) => onChange({ showMap: !v })}
-          />
-          <SettingRow
-            label="Show parking"
-            help="Highlights campus parking on the map: green where you can park right now, red where you can't."
-            checked={settings.showParking}
-            onCheckedChange={(v) => onChange({ showParking: v })}
-          />
-          <SettingRow
-            label="Auto-center building"
-            help="When you open a building from the list, the map automatically centers on it."
-            checked={settings.autoCenter}
-            onCheckedChange={(v) => onChange({ autoCenter: v })}
-          />
-        </TooltipProvider>
+        <SettingRow
+          label="Hide map"
+          checked={!settings.showMap}
+          onCheckedChange={(v) => onChange({ showMap: !v })}
+        />
+        <SettingRow
+          label="Show parking"
+          help="Highlights campus parking on the map: green where you can park right now, red where you can't."
+          checked={settings.showParking}
+          onCheckedChange={(v) => onChange({ showParking: v })}
+        />
+        <SettingRow
+          label="Auto-center building"
+          help="When you open a building from the list, the map automatically centers on it."
+          checked={settings.autoCenter}
+          onCheckedChange={(v) => onChange({ autoCenter: v })}
+        />
         <div className="border-t pt-3">
           <button
             type="button"
