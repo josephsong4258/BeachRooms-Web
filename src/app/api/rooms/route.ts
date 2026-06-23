@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { calculateAvailability, campusNow, toCampusWallClockString } from '@/lib/availability';
 import { ROOMS_CACHE_TAG } from '@/lib/cache';
 import type {
+  Building,
   ClassroomWithBuilding,
   ClassSchedule,
   BuildingWithRooms,
@@ -34,6 +35,20 @@ const getClassrooms = unstable_cache(
     return data as unknown as ClassroomWithBuilding[];
   },
   ['classrooms'],
+  { revalidate: CACHE_SECONDS, tags: [ROOMS_CACHE_TAG] }
+);
+
+// Every campus building, including ones with no classrooms this term. The app
+// surfaces buildings via the classrooms join, so buildings without scheduled
+// sections (e.g. arts/theatre buildings with no summer classes) would never
+// appear. We fetch them here to render as grey "closed for summer" map pins.
+const getAllBuildings = unstable_cache(
+  async () => {
+    const { data, error } = await supabase.from('buildings').select('*');
+    if (error) throw new Error(error.message);
+    return data as unknown as Building[];
+  },
+  ['all-buildings'],
   { revalidate: CACHE_SECONDS, tags: [ROOMS_CACHE_TAG] }
 );
 
@@ -111,10 +126,12 @@ export async function GET(request: NextRequest) {
 
   let classroomsData: ClassroomWithBuilding[];
   let allSchedules: ClassSchedule[];
+  let allBuildings: Building[];
   try {
-    [classroomsData, allSchedules] = await Promise.all([
+    [classroomsData, allSchedules, allBuildings] = await Promise.all([
       getClassrooms(),
       getSchedulesForDay(dayOfWeek),
+      getAllBuildings(),
     ]);
   } catch (e) {
     return NextResponse.json(
@@ -189,6 +206,31 @@ export async function GET(request: NextRequest) {
   }
 
   const buildings: BuildingWithRooms[] = Object.values(buildingsMap);
+
+  // Buildings with no scheduled classes this term aren't in buildingsMap (it's
+  // built from the classrooms join). Add them as roomless "closed for summer"
+  // entries so the map can pin them grey. Skip OFF (off-campus) and any without
+  // coordinates, since a pin needs a location.
+  for (const b of allBuildings) {
+    if (buildingsMap[b.id]) continue;
+    if (b.code === 'OFF') continue;
+    if (b.latitude == null || b.longitude == null) continue;
+    buildings.push({
+      id: b.id,
+      name: b.name ?? b.code,
+      code: b.code,
+      latitude: b.latitude,
+      longitude: b.longitude,
+      weekday_open: b.weekday_open,
+      weekday_close: b.weekday_close,
+      imageUrl: b.image_url ?? null,
+      isOpen: false,
+      availableCount: 0,
+      totalCount: 0,
+      rooms: [],
+      closedForSemester: true,
+    });
+  }
 
   for (const bd of buildings) {
     bd.rooms.sort((a: RoomAvailability, b: RoomAvailability) => {

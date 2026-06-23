@@ -97,6 +97,10 @@ export interface BuildingWithRooms {
   availableCount: number;
   totalCount: number;
   rooms: RoomAvailability[];
+  // True for campus buildings that have no scheduled classes this term (e.g.
+  // arts/theatre buildings with no summer sections). They carry no rooms and
+  // render as grey "closed for summer" pins on the map only — not in the list.
+  closedForSemester?: boolean;
 }
 
 export interface APIResponse {

@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Trash2, ChevronUp } from 'lucide-react';
+import { Trash2, ThumbsUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import SignInDialog from '@/components/SignInDialog';
 import { cn } from '@/lib/utils';
@@ -46,16 +46,6 @@ function timeAgo(iso: string): string {
   const days = Math.floor(hours / 24);
   if (days < 30) return `${days}d ago`;
   return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-}
-
-// Initial-letter circle only — provider profile pictures are unmoderated
-// user content, so they're deliberately not displayed.
-function Avatar({ name }: { name: string }) {
-  return (
-    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-semibold text-secondary-foreground">
-      {name.charAt(0).toUpperCase()}
-    </span>
-  );
 }
 
 // Crowdsourced comment thread, generalized over the comments table so rooms,
@@ -221,43 +211,41 @@ export default function Comments({ table, column, subjectId, placeholder }: Comm
             const upvotes = c.votes.length;
             const upvoted = !!user && c.votes.some((v) => v.user_id === user.id);
             return (
-              <div key={c.id} className="flex gap-2.5">
-                <Avatar name={name} />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-baseline gap-2">
-                    <span className="truncate text-sm font-medium">{name}</span>
-                    <span className="shrink-0 text-xs text-muted-foreground">
-                      {timeAgo(c.created_at)}
-                    </span>
-                    {user?.id === c.user_id && (
-                      <button
-                        onClick={() => deleteComment.mutate(c.id)}
-                        disabled={deleteComment.isPending}
-                        aria-label="Delete comment"
-                        className="ml-auto shrink-0 text-muted-foreground hover:text-destructive disabled:opacity-50"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-                  </div>
-                  <p className="whitespace-pre-wrap break-words text-sm text-foreground/90">
-                    {c.content}
-                  </p>
-                  <button
-                    onClick={() => handleVote(c)}
-                    aria-pressed={upvoted}
-                    aria-label={upvoted ? 'Remove upvote' : 'Upvote'}
-                    className={cn(
-                      'mt-1.5 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-colors',
-                      upvoted
-                        ? 'border-primary/30 bg-primary/10 text-primary'
-                        : 'border-input text-muted-foreground hover:text-foreground'
-                    )}
-                  >
-                    <ChevronUp className="h-3.5 w-3.5" />
-                    Helpful{upvotes > 0 ? ` · ${upvotes}` : ''}
-                  </button>
+              <div key={c.id} className="min-w-0">
+                <div className="flex items-baseline gap-2">
+                  <span className="truncate text-sm font-medium">{name}</span>
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    {timeAgo(c.created_at)}
+                  </span>
+                  {user?.id === c.user_id && (
+                    <button
+                      onClick={() => deleteComment.mutate(c.id)}
+                      disabled={deleteComment.isPending}
+                      aria-label="Delete comment"
+                      className="ml-auto shrink-0 text-muted-foreground hover:text-destructive disabled:opacity-50"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                 </div>
+                <p className="whitespace-pre-wrap break-words text-sm text-foreground/90">
+                  {c.content}
+                </p>
+                {/* YouTube-style like: thumb icon fills when active, count beside it (hidden at 0) */}
+                <button
+                  onClick={() => handleVote(c)}
+                  aria-pressed={upvoted}
+                  aria-label={upvoted ? 'Remove like' : 'Like'}
+                  className={cn(
+                    'mt-1.5 inline-flex items-center gap-1.5 text-xs transition-colors',
+                    upvoted ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  <ThumbsUp
+                    className={cn('h-4 w-4', upvoted && 'fill-current')}
+                  />
+                  {upvotes > 0 && <span className="tabular-nums">{upvotes}</span>}
+                </button>
               </div>
             );
           })}

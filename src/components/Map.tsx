@@ -37,6 +37,10 @@ const LABEL_PLACEMENT: Record<string, 'top' | 'right' | 'left'> = {
   HSD: 'top', // Human Services & Design
   SPA: 'right', // Social Science/Public Affairs
   EN2: 'left', // Engineering 2
+  EN3: 'left', // Engineering 3
+  FO2: 'right', // Faculty Office 2
+  LH: 'right', // Lecture Hall 150-151
+  CINE: 'right', // Cinematic Arts
   LA1: 'right', // Liberal Arts 1
   LA2: 'right', // Liberal Arts 2
   LA3: 'right', // Liberal Arts 3
@@ -143,10 +147,15 @@ function parkingPopupHtml(name: string, lotType: string, open: boolean): string 
 }
 
 function popupHtml(b: BuildingWithRooms): string {
+  const status = b.closedForSemester
+    ? 'Closed for summer'
+    : b.isOpen
+      ? `${b.availableCount}/${b.totalCount} rooms available`
+      : 'Closed';
   return `<div style="padding:2px 0">
     <div style="font-weight:600;font-size:13px">${b.name}</div>
     <div style="font-size:12px;color:#6b7280;margin-top:2px">
-      ${b.isOpen ? `${b.availableCount}/${b.totalCount} rooms available` : 'Closed'}
+      ${status}
     </div>
   </div>`;
 }
@@ -264,6 +273,13 @@ export default function Map({
       const b = buildingsRef.current.find((x) => x.id === buildingId);
       if (!m || !b) return;
       flyToBuilding(b.longitude, b.latitude);
+      // Closed-for-summer buildings have no rooms to show — just surface the
+      // popup (the only way to read its "closed" note on touch, where there's
+      // no hover) instead of opening an empty detail page.
+      if (b.closedForSemester) {
+        popup.current?.setLngLat([b.longitude, b.latitude]).setHTML(popupHtml(b)).addTo(m);
+        return;
+      }
       onBuildingClickRef.current(buildingId);
     });
     return el;

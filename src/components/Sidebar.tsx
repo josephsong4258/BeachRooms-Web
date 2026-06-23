@@ -130,7 +130,10 @@ export default function Sidebar({
   const baseBuildings = useMemo(() => {
     const { groupStudyOnly, startTime, minDurationHours } = filters;
     const hasWindow = startTime !== null || minDurationHours !== null;
-    if (!groupStudyOnly && !hasWindow) return buildings;
+    // Closed-for-summer buildings exist only as grey map pins — they carry no
+    // rooms, so they never belong in the list.
+    const listable = buildings.filter((b) => !b.closedForSemester);
+    if (!groupStudyOnly && !hasWindow) return listable;
 
     const refDate = selectedDateTime ?? new Date();
     let windowStartMin = 0;
@@ -146,7 +149,7 @@ export default function Sidebar({
       windowEndMin = windowStartMin + Math.max((minDurationHours ?? 0) * 60, 1);
     }
 
-    return buildings
+    return listable
       .map((b) => {
         let rooms = b.rooms;
         if (groupStudyOnly) rooms = rooms.filter((r) => r.is_alc);
