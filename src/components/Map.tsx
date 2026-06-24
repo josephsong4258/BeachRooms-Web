@@ -42,6 +42,7 @@ const LABEL_PLACEMENT: Record<string, 'top' | 'right' | 'left'> = {
   MHB: 'top', // Humanities
   HHS1: 'top', // Health & Human Services 1
   SPA: 'right', // Social Science/Public Affairs
+  DESN: 'right', // Design
   EN2: 'left', // Engineering 2
   EN3: 'left', // Engineering 3
   FO2: 'right', // Faculty Office 2
