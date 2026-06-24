@@ -356,7 +356,7 @@ export default function Sidebar({
         <div className="relative">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search buildings or rooms..."
+            placeholder="Search buildings..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-8 pr-8 h-9 text-sm"
