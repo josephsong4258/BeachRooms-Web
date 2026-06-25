@@ -1,5 +1,5 @@
 'use client';
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { Search, X, Calendar, RotateCcw } from 'lucide-react';
 import Fuse from 'fuse.js';
@@ -276,6 +276,54 @@ export default function Sidebar({
     ? buildings.find((b) => b.id === viewBuildingId) ?? null
     : null;
 
+  // --- Mobile: wire the detail stack into browser history so the native back
+  // button (iOS Safari's bottom toolbar arrow, the Android back button, and the
+  // edge-swipe-back gesture) pops one detail level instead of leaving the site.
+  // Desktop is intentionally left as-is: its in-app arrows close levels directly
+  // and never touch history.
+  //
+  // Close the top-most open detail by exactly one level. The precedence mirrors
+  // the `detail` resolution below.
+  const goBack = useCallback(() => {
+    if (selectedSpot) { setSelectedSpot(null); return; }
+    if (viewLibrary) { onCloseLibrary(); return; }
+    if (viewParkingId) { onCloseParking(); return; }
+    if (selectedRoom) { setSelectedRoom(null); setSelectedBuilding(null); return; }
+    if (viewBuildingId) { onCloseBuilding(); return; }
+  }, [selectedSpot, viewLibrary, viewParkingId, selectedRoom, viewBuildingId,
+      onCloseLibrary, onCloseParking, onCloseBuilding]);
+
+  // How many detail layers are stacked: a page-level page (building / parking /
+  // library) plus an optional sub-page (room or study spot).
+  const detailDepth =
+    (viewBuildingId || viewParkingId || viewLibrary ? 1 : 0) +
+    (selectedRoom || selectedSpot ? 1 : 0);
+
+  // Going deeper pushes one history entry per new layer. Going shallower is
+  // always the consequence of an actual history pop — native back, or an in-app
+  // arrow that now calls history.back() on mobile — so the stack is already in
+  // sync and needs no adjustment here.
+  const prevDepthRef = useRef(0);
+  useEffect(() => {
+    if (!isMobile) { prevDepthRef.current = detailDepth; return; }
+    for (let d = prevDepthRef.current; d < detailDepth; d++) {
+      window.history.pushState({ brDetailDepth: d + 1 }, '');
+    }
+    prevDepthRef.current = detailDepth;
+  }, [detailDepth, isMobile]);
+
+  useEffect(() => {
+    if (!isMobile) return;
+    const onPop = () => goBack();
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, [isMobile, goBack]);
+
+  // On mobile every in-app back arrow routes through history (popstate, above,
+  // does the actual state change) so app state and the history stack stay in
+  // lock-step. On desktop the arrows keep closing their level directly.
+  const mobileBack = useCallback(() => window.history.back(), []);
+
   // The detail page (if any) renders as an overlay above the list rather than
   // replacing it, so the list stays mounted and keeps its scroll position when
   // the user backs out. Order/precedence matters: a study-spot sits on top of
@@ -283,11 +331,11 @@ export default function Sidebar({
   // sits on its still-open building so backing out of the room returns there.
   let detail: React.ReactNode = null;
   if (selectedSpot) {
-    detail = <StudySpotDetail spot={selectedSpot} onBack={() => setSelectedSpot(null)} />;
+    detail = <StudySpotDetail spot={selectedSpot} onBack={isMobile ? mobileBack : () => setSelectedSpot(null)} />;
   } else if (viewLibrary) {
     detail = (
       <LibraryDetail
-        onBack={onCloseLibrary}
+        onBack={isMobile ? mobileBack : onCloseLibrary}
         onOpenFloor={(floorId) => {
           const floor = LIBRARY.floors.find((f) => f.id === floorId);
           if (floor) setSelectedSpot(libraryFloorSpot(floor));
@@ -295,13 +343,13 @@ export default function Sidebar({
       />
     );
   } else if (viewParking) {
-    detail = <ParkingDetail lot={viewParking} onBack={onCloseParking} />;
+    detail = <ParkingDetail lot={viewParking} onBack={isMobile ? mobileBack : onCloseParking} />;
   } else if (selectedRoom && selectedBuilding) {
     detail = (
       <RoomDetail
         room={selectedRoom}
         building={selectedBuilding}
-        onBack={() => { setSelectedRoom(null); setSelectedBuilding(null); }}
+        onBack={isMobile ? mobileBack : () => { setSelectedRoom(null); setSelectedBuilding(null); }}
         isMobile={isMobile}
       />
     );
@@ -309,7 +357,7 @@ export default function Sidebar({
     detail = (
       <BuildingDetail
         building={viewBuilding}
-        onBack={onCloseBuilding}
+        onBack={isMobile ? mobileBack : onCloseBuilding}
         onRoomClick={(room, building) => {
           setSelectedRoom(room);
           setSelectedBuilding(building);
