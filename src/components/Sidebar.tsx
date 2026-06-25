@@ -353,7 +353,7 @@ export default function Sidebar({
               filters={filters}
               onChange={(patch) => setFilters((prev) => ({ ...prev, ...patch }))}
             />
-            <SettingsMenu settings={settings} onChange={onSettingsChange} />
+            <SettingsMenu settings={settings} onChange={onSettingsChange} isMobile={isMobile} />
           </div>
         </div>
 

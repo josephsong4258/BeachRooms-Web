@@ -20,6 +20,7 @@ export interface AppSettings {
 interface SettingsMenuProps {
   settings: AppSettings;
   onChange: (patch: Partial<AppSettings>) => void;
+  isMobile: boolean;
 }
 
 function SettingRow({
@@ -67,7 +68,7 @@ const ETIQUETTE = [
   'Classroom access is a privilege. Rooms may be locked by the school if used improperly',
 ];
 
-export default function SettingsMenu({ settings, onChange }: SettingsMenuProps) {
+export default function SettingsMenu({ settings, onChange, isMobile }: SettingsMenuProps) {
   const { user } = useUser();
   const { handle } = useProfile();
   const [showEditHandle, setShowEditHandle] = useState(false);
@@ -95,12 +96,14 @@ export default function SettingsMenu({ settings, onChange }: SettingsMenuProps) 
           checked={settings.showParking}
           onCheckedChange={(v) => onChange({ showParking: v })}
         />
-        <SettingRow
-          label="Auto-center building"
-          help="When you open a building from the list, the map automatically centers on it."
-          checked={settings.autoCenter}
-          onCheckedChange={(v) => onChange({ autoCenter: v })}
-        />
+        {!isMobile && (
+          <SettingRow
+            label="Auto-center building"
+            help="When you open a building from the list, the map automatically centers on it."
+            checked={settings.autoCenter}
+            onCheckedChange={(v) => onChange({ autoCenter: v })}
+          />
+        )}
         <div className="border-t pt-3">
           <button
             type="button"

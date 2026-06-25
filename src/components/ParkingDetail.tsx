@@ -84,7 +84,12 @@ export default function ParkingDetail({ lot, onBack }: ParkingDetailProps) {
         message="Sign in to rate parking and leave tips."
       />
 
-      <ScrollArea className="flex-1">
+      {/* Radix wraps the viewport content in a `display:table; min-width:100%`
+          div, which sizes to its widest child. The employee-lot rating prompt
+          (whitespace-nowrap) would otherwise force that table — and the w-full
+          hero — wider than the column, clipping the right edge on mobile.
+          Forcing the wrapper to `block` makes it fill the width instead. */}
+      <ScrollArea className="flex-1 [&_[data-radix-scroll-area-viewport]>div]:!block">
         {/* Photo hero */}
         <div className="relative h-[210px] w-full shrink-0 overflow-hidden bg-muted">
           {imageSrc ? (
