@@ -20,6 +20,10 @@ const INITIAL_PITCH = 56.99;
 const INITIAL_BEARING = 21.6;
 const MIN_ZOOM = 14;
 const MAX_ZOOM = 18;
+// Selecting a building eases in slightly tighter than the overview (17.20) to
+// pull focus onto it. Floor only: if the user is already zoomed in past this,
+// we keep their zoom and just recenter rather than yanking them back out.
+const SELECT_ZOOM = 17.8;
 const CSULB_BOUNDS: [[number, number], [number, number]] = [
   [-118.122, 33.776], // SW [lng, lat]
   [-118.106, 33.792], // NE [lng, lat]
@@ -254,7 +258,7 @@ export default function Map({
         bearing: m.getBearing(),
       };
     }
-    m.flyTo({ center: [lng, lat], zoom: 17, duration: 800 });
+    m.flyTo({ center: [lng, lat], zoom: Math.max(m.getZoom(), SELECT_ZOOM), duration: 800 });
   }, []);
 
   const makeMarkerElement = useCallback(function makeMarkerElement(buildingId: string): HTMLDivElement {
