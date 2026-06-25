@@ -228,6 +228,11 @@ export default function Sidebar({
     setShowDatePicker(false);
   }
 
+  function resetToNow() {
+    onDateTimeChange(null);
+    setShowDatePicker(false);
+  }
+
   const DatePickerContent = (
     <div className="flex flex-col gap-4 p-4">
       <div className="flex flex-col gap-2">
@@ -249,6 +254,16 @@ export default function Sidebar({
         />
       </div>
       <Button onClick={applyDateTime} className="w-full">Apply</Button>
+      {isCustomTime && (
+        <Button
+          variant="ghost"
+          onClick={resetToNow}
+          className="w-full gap-1.5 text-muted-foreground"
+        >
+          <RotateCcw className="h-3.5 w-3.5" />
+          Back to current time
+        </Button>
+      )}
     </div>
   );
 
