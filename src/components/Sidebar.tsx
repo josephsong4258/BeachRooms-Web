@@ -350,6 +350,7 @@ export default function Sidebar({
         className="-ml-px rounded-l-none"
         filters={filters}
         onChange={(patch) => setFilters((prev) => ({ ...prev, ...patch }))}
+        isMobile={isMobile}
       />
     </div>
   );

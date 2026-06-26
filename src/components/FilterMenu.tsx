@@ -1,7 +1,9 @@
 'use client';
+import { useState } from 'react';
 import { SlidersHorizontal, HelpCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Switch } from '@/components/ui/switch';
 import InfoPopover from '@/components/InfoPopover';
 
@@ -24,111 +26,140 @@ interface FilterMenuProps {
   onChange: (patch: Partial<RoomFilters>) => void;
   // Extra classes for the trigger (e.g. sizing to match the search bar).
   className?: string;
+  // Mobile shows a centered dialog (the popover lands awkwardly on small
+  // screens); desktop keeps the anchored popover.
+  isMobile?: boolean;
 }
 
-export default function FilterMenu({ filters, onChange, className }: FilterMenuProps) {
+export default function FilterMenu({ filters, onChange, className, isMobile = false }: FilterMenuProps) {
+  const [open, setOpen] = useState(false);
   const activeCount =
     (filters.groupStudyOnly ? 1 : 0) +
     (filters.startTime !== null ? 1 : 0) +
     (filters.minDurationHours !== null ? 1 : 0);
 
+  const trigger = (
+    <Button
+      variant="outline"
+      size="icon"
+      className={`relative h-9 w-9 shrink-0 ${className ?? ''}`}
+      aria-label="Filters"
+    >
+      <SlidersHorizontal className="h-3.5 w-3.5" />
+      {activeCount > 0 && (
+        <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#1a9e3f] text-[9px] font-bold text-white">
+          {activeCount}
+        </span>
+      )}
+    </Button>
+  );
+
+  const controls = (
+    <>
+      {/* Start time */}
+      <div className="space-y-1.5">
+        <label className="text-sm font-medium">Free starting at</label>
+        <input
+          type="time"
+          value={filters.startTime ?? ''}
+          onChange={(e) => onChange({ startTime: e.target.value || null })}
+          className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        />
+      </div>
+
+      {/* Minimum duration */}
+      <div className="space-y-1.5">
+        <p className="text-sm font-medium">Minimum duration</p>
+        <div className="flex gap-1.5">
+          {DURATION_OPTIONS.map((h) => {
+            const selected = filters.minDurationHours === h;
+            return (
+              <button
+                key={h}
+                onClick={() => onChange({ minDurationHours: selected ? null : h })}
+                aria-pressed={selected}
+                className={`flex-1 rounded-full border px-2 py-1 text-xs font-medium transition-colors ${
+                  selected
+                    ? 'bg-[#e6f9ec] border-[#7ee8a0] text-[#1a9e3f]'
+                    : 'bg-background border-border text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {h}h
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Group study */}
+      <div className="flex items-center justify-between gap-3">
+        <span className="flex items-center gap-1.5 text-sm font-medium">
+          Group study rooms
+          <InfoPopover
+            trigger={
+              <button
+                type="button"
+                aria-label="What are group study rooms?"
+                className="text-muted-foreground/70 hover:text-muted-foreground"
+              >
+                <HelpCircle className="h-3.5 w-3.5" />
+              </button>
+            }
+          >
+            Classrooms designed for group work, with movable seating and
+            collaborative layouts.
+          </InfoPopover>
+        </span>
+        <Switch
+          checked={filters.groupStudyOnly}
+          onCheckedChange={(v) => onChange({ groupStudyOnly: v })}
+          aria-label="Group study rooms"
+        />
+      </div>
+
+      {activeCount > 0 && (
+        <button
+          onClick={() =>
+            onChange({ groupStudyOnly: false, startTime: null, minDurationHours: null })
+          }
+          className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+        >
+          Clear all filters
+        </button>
+      )}
+    </>
+  );
+
+  if (isMobile) {
+    return (
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogTrigger asChild>{trigger}</DialogTrigger>
+        <DialogContent
+          // Don't auto-focus the time input on open (pops the native picker).
+          onOpenAutoFocus={(e) => e.preventDefault()}
+          className="max-w-[90vw] space-y-4 rounded-2xl sm:max-w-sm sm:rounded-2xl"
+        >
+          <DialogHeader>
+            <DialogTitle>Filters</DialogTitle>
+          </DialogHeader>
+          {controls}
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
   return (
     <Popover>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          size="icon"
-          className={`relative h-9 w-9 shrink-0 ${className ?? ''}`}
-          aria-label="Filters"
-        >
-          <SlidersHorizontal className="h-3.5 w-3.5" />
-          {activeCount > 0 && (
-            <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#1a9e3f] text-[9px] font-bold text-white">
-              {activeCount}
-            </span>
-          )}
-        </Button>
-      </PopoverTrigger>
+      <PopoverTrigger asChild>{trigger}</PopoverTrigger>
       <PopoverContent
         align="end"
-        // Don't auto-focus the first field (the time input) on open — on mobile
-        // that pops the native time picker the moment you tap the filter button.
+        // Don't auto-focus the first field (the time input) on open — that pops
+        // the native time picker the moment you open the filter.
         onOpenAutoFocus={(e) => e.preventDefault()}
         className="w-64 space-y-4"
       >
         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Filters</p>
-
-        {/* Start time */}
-        <div className="space-y-1.5">
-          <label className="text-sm font-medium">Free starting at</label>
-          <input
-            type="time"
-            value={filters.startTime ?? ''}
-            onChange={(e) => onChange({ startTime: e.target.value || null })}
-            className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          />
-        </div>
-
-        {/* Minimum duration */}
-        <div className="space-y-1.5">
-          <p className="text-sm font-medium">Minimum duration</p>
-          <div className="flex gap-1.5">
-            {DURATION_OPTIONS.map((h) => {
-              const selected = filters.minDurationHours === h;
-              return (
-                <button
-                  key={h}
-                  onClick={() => onChange({ minDurationHours: selected ? null : h })}
-                  aria-pressed={selected}
-                  className={`flex-1 rounded-full border px-2 py-1 text-xs font-medium transition-colors ${
-                    selected
-                      ? 'bg-[#e6f9ec] border-[#7ee8a0] text-[#1a9e3f]'
-                      : 'bg-background border-border text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  {h}h
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Group study */}
-        <div className="flex items-center justify-between gap-3">
-          <span className="flex items-center gap-1.5 text-sm font-medium">
-            Group study rooms
-            <InfoPopover
-              trigger={
-                <button
-                  type="button"
-                  aria-label="What are group study rooms?"
-                  className="text-muted-foreground/70 hover:text-muted-foreground"
-                >
-                  <HelpCircle className="h-3.5 w-3.5" />
-                </button>
-              }
-            >
-              Classrooms designed for group work, with movable seating and
-              collaborative layouts.
-            </InfoPopover>
-          </span>
-          <Switch
-            checked={filters.groupStudyOnly}
-            onCheckedChange={(v) => onChange({ groupStudyOnly: v })}
-            aria-label="Group study rooms"
-          />
-        </div>
-
-        {activeCount > 0 && (
-          <button
-            onClick={() =>
-              onChange({ groupStudyOnly: false, startTime: null, minDurationHours: null })
-            }
-            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-          >
-            Clear all filters
-          </button>
-        )}
+        {controls}
       </PopoverContent>
     </Popover>
   );
