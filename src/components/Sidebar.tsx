@@ -122,25 +122,22 @@ export default function Sidebar({
 
   // Apply filters (group study, free-from time window) and recompute building counts
   const baseBuildings = useMemo(() => {
-    const { groupStudyOnly, startTime, minDurationHours } = filters;
-    const hasWindow = startTime !== null || minDurationHours !== null;
+    const { groupStudyOnly, minDurationHours } = filters;
+    const hasWindow = minDurationHours !== null;
     // Closed-for-summer buildings exist only as grey map pins — they carry no
     // rooms, so they never belong in the list.
     const listable = buildings.filter((b) => !b.closedForSemester);
     if (!groupStudyOnly && !hasWindow) return listable;
 
+    // The window always starts at the current reference time (now, or the
+    // Time-Travel instant) and runs for the requested duration, so the filter
+    // means "rooms free for at least N hours from here".
     const refDate = selectedDateTime ?? new Date();
     let windowStartMin = 0;
     let windowEndMin = 0;
     if (hasWindow) {
-      if (startTime) {
-        const [h, m] = startTime.split(':').map(Number);
-        windowStartMin = h * 60 + m;
-      } else {
-        windowStartMin = refDate.getHours() * 60 + refDate.getMinutes();
-      }
-      // No duration selected = just "free at that time"
-      windowEndMin = windowStartMin + Math.max((minDurationHours ?? 0) * 60, 1);
+      windowStartMin = refDate.getHours() * 60 + refDate.getMinutes();
+      windowEndMin = windowStartMin + minDurationHours * 60;
     }
 
     return listable

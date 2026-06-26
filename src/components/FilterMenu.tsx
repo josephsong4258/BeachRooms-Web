@@ -9,13 +9,13 @@ import InfoPopover from '@/components/InfoPopover';
 
 export interface RoomFilters {
   groupStudyOnly: boolean;
-  startTime: string | null; // "HH:MM", null = current time
+  // Minimum hours a room must stay free, measured from the current reference
+  // time (now, or the Time-Travel instant). null = no duration requirement.
   minDurationHours: number | null;
 }
 
 export const EMPTY_FILTERS: RoomFilters = {
   groupStudyOnly: false,
-  startTime: null,
   minDurationHours: null,
 };
 
@@ -35,7 +35,6 @@ export default function FilterMenu({ filters, onChange, className, isMobile = fa
   const [open, setOpen] = useState(false);
   const activeCount =
     (filters.groupStudyOnly ? 1 : 0) +
-    (filters.startTime !== null ? 1 : 0) +
     (filters.minDurationHours !== null ? 1 : 0);
 
   const trigger = (
@@ -56,20 +55,9 @@ export default function FilterMenu({ filters, onChange, className, isMobile = fa
 
   const controls = (
     <>
-      {/* Start time */}
+      {/* Minimum free duration, measured from the current reference time. */}
       <div className="space-y-1.5">
-        <label className="text-sm font-medium">Free starting at</label>
-        <input
-          type="time"
-          value={filters.startTime ?? ''}
-          onChange={(e) => onChange({ startTime: e.target.value || null })}
-          className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        />
-      </div>
-
-      {/* Minimum duration */}
-      <div className="space-y-1.5">
-        <p className="text-sm font-medium">Minimum duration</p>
+        <p className="text-sm font-medium">Free for at least</p>
         <div className="flex gap-1.5">
           {DURATION_OPTIONS.map((h) => {
             const selected = filters.minDurationHours === h;
@@ -120,7 +108,7 @@ export default function FilterMenu({ filters, onChange, className, isMobile = fa
       {activeCount > 0 && (
         <button
           onClick={() =>
-            onChange({ groupStudyOnly: false, startTime: null, minDurationHours: null })
+            onChange({ groupStudyOnly: false, minDurationHours: null })
           }
           className="text-xs text-muted-foreground hover:text-foreground transition-colors"
         >
@@ -135,7 +123,8 @@ export default function FilterMenu({ filters, onChange, className, isMobile = fa
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogTrigger asChild>{trigger}</DialogTrigger>
         <DialogContent
-          // Don't auto-focus the time input on open (pops the native picker).
+          // Don't auto-focus the first control on open (it highlights a
+          // duration button, which reads like it's already selected).
           onOpenAutoFocus={(e) => e.preventDefault()}
           className="grid-cols-1 max-w-[90vw] rounded-2xl sm:max-w-sm sm:rounded-2xl"
         >
@@ -153,8 +142,8 @@ export default function FilterMenu({ filters, onChange, className, isMobile = fa
       <PopoverTrigger asChild>{trigger}</PopoverTrigger>
       <PopoverContent
         align="end"
-        // Don't auto-focus the first field (the time input) on open — that pops
-        // the native time picker the moment you open the filter.
+        // Don't auto-focus the first control on open — it highlights a duration
+        // button, which reads like it's already selected.
         onOpenAutoFocus={(e) => e.preventDefault()}
         className="w-64 space-y-4"
       >
