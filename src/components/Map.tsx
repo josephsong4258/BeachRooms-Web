@@ -23,7 +23,10 @@ const MAX_ZOOM = 18;
 // Selecting a building eases in slightly tighter than the overview (17.20) to
 // pull focus onto it. Floor only: if the user is already zoomed in past this,
 // we keep their zoom and just recenter rather than yanking them back out.
+// Mobile starts further out (16.8) and the narrow viewport makes 17.8 feel too
+// tight, so it eases to a gentler zoom.
 const SELECT_ZOOM = 17.8;
+const MOBILE_SELECT_ZOOM = 17.0;
 const CSULB_BOUNDS: [[number, number], [number, number]] = [
   [-118.122, 33.776], // SW [lng, lat]
   [-118.106, 33.792], // NE [lng, lat]
@@ -41,15 +44,17 @@ const DEFAULT_STYLE = 'mapbox://styles/josephsong23/cmip4pzo400e501st3fdjay4h';
 // where the default would sit on a neighboring pin or label.
 const LABEL_PLACEMENT: Record<string, 'top' | 'right' | 'left'> = {
   ECS: 'top', // Engineering/Computer Science
-  ET: 'top', // Engineering Technology
+  ET: 'right', // Engineering Technology
   HSD: 'top', // Human Services & Design
   MHB: 'top', // Humanities
   HHS1: 'top', // Health & Human Services 1
   SPA: 'right', // Social Science/Public Affairs
   DESN: 'right', // Design
-  EN2: 'left', // Engineering 2
-  EN3: 'left', // Engineering 3
   FO2: 'right', // Faculty Office 2
+  FA1: 'right', // Fine Arts 1
+  FA2: 'right', // Fine Arts 2
+  FA3: 'right', // Fine Arts 3
+  FA4: 'right', // Fine Arts 4
   LH: 'right', // Lecture Hall 150-151
   CINE: 'right', // Cinematic Arts
   LA1: 'left', // Liberal Arts 1
@@ -57,6 +62,20 @@ const LABEL_PLACEMENT: Record<string, 'top' | 'right' | 'left'> = {
   LA3: 'left', // Liberal Arts 3
   LA4: 'left', // Liberal Arts 4
   LA5: 'left', // Liberal Arts 5
+};
+
+// Per-building desktop display-label overrides (keyed by code), for names worth
+// shortening on the map. Mobile keeps the raw code. A trailing number splits to
+// its own line via the numbered-building logic below.
+const NAME_OVERRIDES: Record<string, string> = {
+  EN2: 'Eng. 2', // Engineering 2
+  EN3: 'Eng. 3', // Engineering 3
+  EN4: 'Eng. 4', // Engineering 4
+  // A "\n" forces an explicit two-line layout (rendered via white-space:
+  // pre-line); used where the full name reads better stacked on the map.
+  ET: 'Engineering\nTechnology',
+  SPA: 'Social Science/\nPublic Affairs',
+  LH: 'Lecture Hall\n150-151',
 };
 
 export interface CenterTarget {
@@ -258,7 +277,16 @@ export default function Map({
         bearing: m.getBearing(),
       };
     }
-    m.flyTo({ center: [lng, lat], zoom: Math.max(m.getZoom(), SELECT_ZOOM), duration: 800 });
+    const selectZoom = isMobileRef.current ? MOBILE_SELECT_ZOOM : SELECT_ZOOM;
+    // On mobile the bottom sheet sits at the half snap, hiding the lower half of
+    // the canvas. Pad the bottom by half the map height so the building centers
+    // in the visible top half instead of behind the sheet. (We only handle the
+    // half view — the snap the vast majority of users keep it at.)
+    const h = mapContainer.current?.clientHeight ?? 0;
+    const padding = isMobileRef.current
+      ? { top: 0, right: 0, bottom: h / 2, left: 0 }
+      : { top: 0, right: 0, bottom: 0, left: 0 };
+    m.flyTo({ center: [lng, lat], zoom: Math.max(m.getZoom(), selectZoom), duration: 800, padding });
   }, []);
 
   const makeMarkerElement = useCallback(function makeMarkerElement(buildingId: string): HTMLDivElement {
@@ -312,9 +340,27 @@ export default function Map({
       const el = marker.getElement();
       (el.querySelector('img') as HTMLImageElement).src = pinUrl(b);
       const label = el.querySelector('.building-marker-label') as HTMLDivElement;
-      label.textContent = isMobileRef.current ? (b.code ?? b.name) : (b.name ?? b.code);
+      const override = isMobileRef.current ? undefined : NAME_OVERRIDES[b.code];
+      const labelText = override ?? (isMobileRef.current ? (b.code ?? b.name) : (b.name ?? b.code));
+      // Numbered buildings whose name fits on one line (e.g. "Liberal Arts 1",
+      // "Fine Arts 4") read better with the trailing number dropped to its own
+      // line. Longer names (e.g. "Health & Human Services 1") fall through and
+      // wrap normally so the base doesn't get split awkwardly. An explicit
+      // override (e.g. "Eng. 2") is used verbatim — number stays on one line.
+      const numbered = override ? null : /^(.*\S)\s+(\d+)$/.exec(labelText);
+      label.textContent = '';
+      if (numbered && numbered[1].length <= 16) {
+        label.append(numbered[1]);
+        const num = document.createElement('span');
+        num.className = 'label-number';
+        num.textContent = numbered[2];
+        label.append(num);
+      } else {
+        label.textContent = labelText;
+      }
       const placement = LABEL_PLACEMENT[b.code];
-      label.className = `building-marker-label${placement ? ` label-${placement}` : ''}`;
+      const multiline = override?.includes('\n') ? ' label-multiline' : '';
+      label.className = `building-marker-label${placement ? ` label-${placement}` : ''}${multiline}`;
     }
 
     for (const [id, marker] of Object.entries(markers.current)) {
@@ -485,35 +531,9 @@ export default function Map({
       const m = map.current;
       if (!m) return;
 
-      // 3D building extrusions
-      if (!m.getSource('mapbox-streets')) {
-        m.addSource('mapbox-streets', {
-          type: 'vector',
-          url: 'mapbox://mapbox.mapbox-streets-v8',
-        });
-        m.addLayer({
-          id: '3d-buildings',
-          source: 'mapbox-streets',
-          'source-layer': 'building',
-          type: 'fill-extrusion',
-          minzoom: 14,
-          filter: ['==', 'extrude', 'true'],
-          paint: {
-            'fill-extrusion-color': 'hsl(40, 43%, 93%)',
-            'fill-extrusion-height': [
-              'interpolate', ['linear'], ['zoom'],
-              14, 0,
-              14.5, ['get', 'height'],
-            ],
-            'fill-extrusion-base': [
-              'interpolate', ['linear'], ['zoom'],
-              14, 0,
-              14.5, ['get', 'min_height'],
-            ],
-            'fill-extrusion-opacity': 0.6,
-          },
-        });
-      }
+      // 3D buildings come from the Mapbox Standard basemap import, so they pick
+      // up the style's lightPreset (dawn) lighting and cast real shadows. We no
+      // longer overlay a custom flat fill-extrusion layer, which washed that out.
 
       // Parking areas: translucent ground-hugging circles, green when the
       // student can park there right now, red when they can't. Canvas layer,
@@ -657,7 +677,13 @@ export default function Map({
     const m = map.current;
     if (!m) return;
     if (!selectedBuildingId && savedCamera.current) {
-      m.flyTo({ ...savedCamera.current, duration: 800 });
+      // Reset the padding applied while focusing a building so the overview
+      // restores to its original (unpadded) framing.
+      m.flyTo({
+        ...savedCamera.current,
+        padding: { top: 0, right: 0, bottom: 0, left: 0 },
+        duration: 800,
+      });
       savedCamera.current = null;
     }
   }, [selectedBuildingId]);

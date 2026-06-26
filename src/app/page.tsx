@@ -6,6 +6,8 @@ import Sidebar from '@/components/Sidebar';
 import MobileSheet from '@/components/MobileSheet';
 import LoadingScreen from '@/components/LoadingScreen';
 import { formatDateTimeParam } from '@/lib/time-utils';
+import { ReferenceTimeProvider } from '@/lib/reference-time';
+import TimeTravel from '@/components/TimeTravel';
 import type { AppSettings } from '@/components/SettingsMenu';
 import type { CenterTarget } from '@/components/Map';
 import type { APIResponse, BuildingWithRooms } from '@/types';
@@ -128,12 +130,6 @@ export default function Home() {
     }
   }, []);
 
-  // On mobile, any open detail page (building / room / parking / library / spot)
-  // turns the bottom sheet into a full-screen slide-over. Room and spot pages
-  // are reached only through a building or the library, so these page-level
-  // flags cover every detail the Sidebar can show.
-  const mobileDetailOpen = !!(viewBuildingId || viewParkingId || viewLibrary);
-
   const sidebar = (
     <Sidebar
       buildings={buildings}
@@ -178,14 +174,31 @@ export default function Home() {
         />
       )}
 
+      <ReferenceTimeProvider value={selectedDateTime}>
       <div className="h-dvh flex flex-col overflow-hidden">
         <div className="flex flex-1 overflow-hidden">
           {isMobile ? (
-            // Mobile: full-bleed map with the list as a draggable bottom sheet.
-            <div className="relative flex-1 overflow-hidden">
-              <div className="absolute inset-0">{map}</div>
-              <MobileSheet detailOpen={mobileDetailOpen}>{sidebar}</MobileSheet>
-            </div>
+            showMap ? (
+              // Mobile: full-bleed map with the list as a draggable bottom sheet.
+              // Time travel floats in the map's top-right corner.
+              <div className="relative flex-1 overflow-hidden">
+                <div className="absolute inset-0">{map}</div>
+                <TimeTravel
+                  selectedDateTime={selectedDateTime}
+                  onDateTimeChange={setSelectedDateTime}
+                  isFetching={isFetching && !isLoading}
+                  isMobile
+                  compact
+                  className="absolute top-3 right-3 z-10 shadow-md"
+                />
+                <MobileSheet>{sidebar}</MobileSheet>
+              </div>
+            ) : (
+              // Mobile, map hidden: the list fills the screen (no sheet/map).
+              <div className="flex flex-col flex-1 overflow-hidden bg-background">
+                {sidebar}
+              </div>
+            )
           ) : (
             // Desktop: sidebar list (37%) beside the map (63%); full width when
             // the map is hidden.
@@ -202,6 +215,7 @@ export default function Home() {
           )}
         </div>
       </div>
+      </ReferenceTimeProvider>
     </>
   );
 }

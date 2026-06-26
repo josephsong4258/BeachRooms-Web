@@ -8,6 +8,7 @@ import {
   RoomRow,
 } from '@/components/building-shared';
 import { buildingStudySpots } from '@/data/study-spots';
+import { useReferenceNow } from '@/lib/reference-time';
 import type { BuildingWithRooms, RoomAvailability } from '@/types';
 
 // The University Library is a "special place" (no scraped rooms, so it's not in
@@ -118,16 +119,10 @@ function LibraryNavRow({ entry }: { entry: LibraryEntry }) {
 
 function SectionHeader({ children }: { children: React.ReactNode }) {
   return (
-    <h2 className="px-2 pb-1 pt-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+    <h2 className="px-2 pb-0.5 pt-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
       {children}
     </h2>
   );
-}
-
-// A hairline like the row separators, but darker, to set favorited rooms apart
-// from favorited buildings.
-function SectionPartition() {
-  return <div className="h-px bg-muted-foreground/20" aria-hidden="true" />;
 }
 
 // One alphabetical stream of building + library rows; the library carries its
@@ -148,7 +143,7 @@ function BuildingList({
   libraryEntry,
   showFavorites,
 }: BuildingListProps) {
-  const now = Date.now();
+  const now = useReferenceNow().getTime();
 
   // Pinned favorite rooms, sorted: available first, then by building code and
   // numeric room number
@@ -221,27 +216,22 @@ function BuildingList({
       {hasFavorites && (
         <section>
           <SectionHeader>Favorites</SectionHeader>
-          {favoriteRows.length > 0 && (
-            <div className="[&>*:last-child]:border-b-0">{favoriteRows.map(renderRow)}</div>
-          )}
-          {/* A heavier break sets the favorited buildings apart from favorited
-              rooms, which read differently (count badge vs. live status). */}
-          {favoriteRows.length > 0 && favoriteRooms.length > 0 && <SectionPartition />}
-          {favoriteRooms.length > 0 && (
-            <div className="[&>*:last-child]:border-b-0">
-              {favoriteRooms.map(({ room, building }) => (
-                <RoomRow
-                  key={`fav-${room.id}`}
-                  room={room}
-                  type={classifyRoom(room, now)}
-                  buildingCode={building.code}
-                  onClick={() => onRoomClick(room, building)}
-                  isFavorite
-                  onToggleFavorite={() => onToggleFavoriteRoom(room.id)}
-                />
-              ))}
-            </div>
-          )}
+          {/* Favorited buildings and rooms read as one continuous list (no
+              divider between the two groups). */}
+          <div className="[&>*:last-child]:border-b-0">
+            {favoriteRows.map(renderRow)}
+            {favoriteRooms.map(({ room, building }) => (
+              <RoomRow
+                key={`fav-${room.id}`}
+                room={room}
+                type={classifyRoom(room, now)}
+                buildingCode={building.code}
+                onClick={() => onRoomClick(room, building)}
+                isFavorite
+                onToggleFavorite={() => onToggleFavoriteRoom(room.id)}
+              />
+            ))}
+          </div>
         </section>
       )}
 

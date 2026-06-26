@@ -5,6 +5,7 @@
 import Image from 'next/image';
 import { ChevronRight, Star } from 'lucide-react';
 import { nextOpeningDate } from '@/lib/building-hours';
+import { useReferenceNow } from '@/lib/reference-time';
 import type { BuildingWithRooms, RoomAvailability } from '@/types';
 
 export const OPENING_SOON_MINUTES = 30;
@@ -34,8 +35,7 @@ export function classifyRoom(room: RoomAvailability, now: number): RoomGroup {
   return 'occupied';
 }
 
-export function groupRooms(rooms: RoomAvailability[]) {
-  const now = Date.now();
+export function groupRooms(rooms: RoomAvailability[], now: number = Date.now()) {
   const available: RoomAvailability[] = [];
   const openingSoon: RoomAvailability[] = [];
   const occupied: RoomAvailability[] = [];
@@ -190,8 +190,8 @@ function StatusText({ room, type }: { room: RoomAvailability; type: RoomGroup })
   if (type === 'available' && room.nextClassStartsAt && room.minutesUntilNextClass != null) {
     return (
       <p className="mt-0.5 text-[13px] text-muted-foreground">
-        Available for <span className="font-bold">{formatDuration(room.minutesUntilNextClass)}</span>{' '}
-        until <span className="font-bold">{formatTime(new Date(room.nextClassStartsAt))}</span>
+        Free until <span className="font-bold">{formatTime(new Date(room.nextClassStartsAt))}</span>{' '}
+        · <span className="font-bold">{formatDuration(room.minutesUntilNextClass)}</span> left
       </p>
     );
   }
@@ -202,8 +202,7 @@ function StatusText({ room, type }: { room: RoomAvailability; type: RoomGroup })
     if (m) {
       return (
         <p className="mt-0.5 text-[13px] text-muted-foreground">
-          Available for <span className="font-bold">{m[2]}</span> until{' '}
-          <span className="font-bold">{m[1]}</span>
+          Free until <span className="font-bold">{m[1]}</span> · <span className="font-bold">{m[2]}</span> left
         </p>
       );
     }
@@ -212,8 +211,7 @@ function StatusText({ room, type }: { room: RoomAvailability; type: RoomGroup })
     if (m2) {
       return (
         <p className="mt-0.5 text-[13px] text-muted-foreground">
-          Available for <span className="font-bold">{m2[2]}</span> until{' '}
-          <span className="font-bold">{m2[1]}</span>
+          Free until <span className="font-bold">{m2[1]}</span> · <span className="font-bold">{m2[2]}</span> left
         </p>
       );
     }
@@ -232,7 +230,7 @@ function StatusText({ room, type }: { room: RoomAvailability; type: RoomGroup })
     if (m) {
       return (
         <p className="mt-0.5 text-[13px] text-muted-foreground">
-          Free at <span className="font-bold">{m[1]}</span> for <span className="font-bold">{m[2]}</span>
+          Free at <span className="font-bold">{m[1]}</span>
         </p>
       );
     }
@@ -287,9 +285,10 @@ export function RoomRow({
   isFavorite: boolean;
   onToggleFavorite: () => void;
 }) {
+  const now = useReferenceNow();
   const minutesUntilFree =
     type === 'openingSoon' && room.currentClassEndsAt
-      ? Math.max(1, Math.floor((new Date(room.currentClassEndsAt).getTime() - Date.now()) / 60000))
+      ? Math.max(1, Math.floor((new Date(room.currentClassEndsAt).getTime() - now.getTime()) / 60000))
       : null;
 
   // Wrapper is a div (not a button) so the star can be its own button —

@@ -22,9 +22,11 @@ const DURATION_OPTIONS = [1, 2, 3, 4];
 interface FilterMenuProps {
   filters: RoomFilters;
   onChange: (patch: Partial<RoomFilters>) => void;
+  // Extra classes for the trigger (e.g. sizing to match the search bar).
+  className?: string;
 }
 
-export default function FilterMenu({ filters, onChange }: FilterMenuProps) {
+export default function FilterMenu({ filters, onChange, className }: FilterMenuProps) {
   const activeCount =
     (filters.groupStudyOnly ? 1 : 0) +
     (filters.startTime !== null ? 1 : 0) +
@@ -36,7 +38,7 @@ export default function FilterMenu({ filters, onChange }: FilterMenuProps) {
         <Button
           variant="outline"
           size="icon"
-          className="relative h-8 w-8 shrink-0"
+          className={`relative h-9 w-9 shrink-0 ${className ?? ''}`}
           aria-label="Filters"
         >
           <SlidersHorizontal className="h-3.5 w-3.5" />

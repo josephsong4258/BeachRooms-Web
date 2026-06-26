@@ -12,15 +12,16 @@ import type { StudySpot } from '@/data/study-spots';
 interface StudySpotDetailProps {
   spot: StudySpot;
   onBack: () => void;
+  isMobile: boolean;
 }
 
-export default function StudySpotDetail({ spot, onBack }: StudySpotDetailProps) {
+export default function StudySpotDetail({ spot, onBack, isMobile }: StudySpotDetailProps) {
   const [showSignIn, setShowSignIn] = useState(false);
   const quiet = spot.type === 'quiet';
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-start gap-2 border-b p-4">
+      <div className="flex items-center gap-2 border-b px-3 py-2">
         <Button variant="ghost" size="icon" onClick={onBack} className="shrink-0">
           <ArrowLeft className="h-4 w-4" />
         </Button>
@@ -49,7 +50,7 @@ export default function StudySpotDetail({ spot, onBack }: StudySpotDetailProps) 
       />
 
       <ScrollArea className="flex-1">
-        <div className="relative h-[210px] w-full shrink-0 overflow-hidden bg-muted">
+        <div className={`relative ${isMobile ? 'h-[140px]' : 'h-[210px]'} w-full shrink-0 overflow-hidden bg-muted`}>
           <Image
             src={spot.image}
             alt={`${spot.name} at ${spot.parentName}`}
@@ -59,7 +60,7 @@ export default function StudySpotDetail({ spot, onBack }: StudySpotDetailProps) 
           />
         </div>
 
-        <div className="space-y-5 p-4">
+        <div className={`space-y-5 px-4 pb-4 ${isMobile ? 'pt-3' : 'pt-4'}`}>
           {/* Vibe note */}
           <div className="flex items-start gap-2 rounded-lg bg-muted/50 px-4 py-3 text-[13px] text-muted-foreground">
             {quiet ? (

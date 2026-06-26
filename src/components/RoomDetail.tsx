@@ -12,6 +12,7 @@ import RoomStatusBadge from '@/components/RoomStatusBadge';
 import SignInDialog from '@/components/SignInDialog';
 import { useFavorites } from '@/lib/use-favorites';
 import { effectiveHours } from '@/lib/building-hours';
+import { useReferenceNow } from '@/lib/reference-time';
 import type { RoomAvailability, BuildingWithRooms, AvailabilityStatus } from '@/types';
 
 interface RoomDetailProps {
@@ -55,8 +56,8 @@ function StatusLine({ room, building }: { room: RoomAvailability; building: Buil
     if (room.nextClassStartsAt && room.minutesUntilNextClass != null) {
       return (
         <>
-          Available for <span className="font-bold">{formatDuration(room.minutesUntilNextClass)}</span>{' '}
-          until <span className="font-bold">{formatClockTime(new Date(room.nextClassStartsAt))}</span>
+          Free until <span className="font-bold">{formatClockTime(new Date(room.nextClassStartsAt))}</span>{' '}
+          · <span className="font-bold">{formatDuration(room.minutesUntilNextClass)}</span> left
         </>
       );
     }
@@ -73,8 +74,8 @@ function StatusLine({ room, building }: { room: RoomAvailability; building: Buil
       const closeLabel = `${h % 12 || 12}:${String(m).padStart(2, '0')} ${ampm}`;
       return (
         <>
-          Available for <span className="font-bold">{formatDuration(room.availableDurationMinutes)}</span>{' '}
-          until <span className="font-bold">{closeLabel}</span>
+          Free until <span className="font-bold">{closeLabel}</span>{' '}
+          · <span className="font-bold">{formatDuration(room.availableDurationMinutes)}</span> left
         </>
       );
     }
@@ -84,7 +85,7 @@ function StatusLine({ room, building }: { room: RoomAvailability; building: Buil
   if (m) {
     return (
       <>
-        Free at <span className="font-bold">{m[1]}</span> for <span className="font-bold">{m[2]}</span>
+        Free at <span className="font-bold">{m[1]}</span>
       </>
     );
   }
@@ -97,8 +98,9 @@ export default function RoomDetail({ room, building, onBack, isMobile = false }:
   const [showSignIn, setShowSignIn] = useState(false);
   const isFavorite = favoriteRoomIds.has(room.id);
   // The timeline dims hours before the current hour; the class list dims
-  // classes that have already ended.
-  const now = new Date();
+  // classes that have already ended. Uses the time-travelled time when set so
+  // the schedule shading reflects the selected time, not the wall clock.
+  const now = useReferenceNow();
   const currentHour = now.getHours();
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
   const statusCard = STATUS_CARD[room.status];
@@ -112,7 +114,7 @@ export default function RoomDetail({ room, building, onBack, isMobile = false }:
     building.code,
     building.weekday_open,
     building.weekday_close,
-    new Date()
+    now
   );
 
   function formatTime(t: string) {
@@ -123,7 +125,7 @@ export default function RoomDetail({ room, building, onBack, isMobile = false }:
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center gap-2 p-4 border-b">
+      <div className="flex items-center gap-2 px-3 py-2 border-b">
         <Button variant="ghost" size="icon" onClick={onBack} className="shrink-0">
           <ArrowLeft className="h-4 w-4" />
         </Button>

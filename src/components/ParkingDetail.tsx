@@ -13,6 +13,7 @@ import { parkingImage } from '@/lib/parking-images';
 interface ParkingDetailProps {
   lot: ParkingLot;
   onBack: () => void;
+  isMobile: boolean;
 }
 
 function StatusPill({ open, isStudent }: { open: boolean; isStudent: boolean }) {
@@ -57,7 +58,7 @@ function AccessNote({ open }: { open: boolean }) {
   );
 }
 
-export default function ParkingDetail({ lot, onBack }: ParkingDetailProps) {
+export default function ParkingDetail({ lot, onBack, isMobile }: ParkingDetailProps) {
   const [showSignIn, setShowSignIn] = useState(false);
   const open = isParkingOpenNow(lot);
   const isStudent = lot.type === 'student';
@@ -66,7 +67,7 @@ export default function ParkingDetail({ lot, onBack }: ParkingDetailProps) {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-start gap-2 border-b p-4">
+      <div className="flex items-center gap-2 border-b px-3 py-2">
         <Button variant="ghost" size="icon" onClick={onBack} className="shrink-0">
           <ArrowLeft className="h-4 w-4" />
         </Button>
@@ -91,7 +92,7 @@ export default function ParkingDetail({ lot, onBack }: ParkingDetailProps) {
           Forcing the wrapper to `block` makes it fill the width instead. */}
       <ScrollArea className="flex-1 [&_[data-radix-scroll-area-viewport]>div]:!block">
         {/* Photo hero */}
-        <div className="relative h-[210px] w-full shrink-0 overflow-hidden bg-muted">
+        <div className={`relative ${isMobile ? 'h-[140px]' : 'h-[210px]'} w-full shrink-0 overflow-hidden bg-muted`}>
           {imageSrc ? (
             <Image
               src={imageSrc}
@@ -118,7 +119,7 @@ export default function ParkingDetail({ lot, onBack }: ParkingDetailProps) {
           </div>
         </div>
 
-        <div className="space-y-5 p-4">
+        <div className={`space-y-5 px-4 pb-4 ${isMobile ? 'pt-3' : 'pt-4'}`}>
           {/* Access note: employee lots only; student lots are always open. */}
           {!isStudent && (
             <div className="rounded-lg bg-muted/50 px-4 py-3">
@@ -132,10 +133,9 @@ export default function ParkingDetail({ lot, onBack }: ParkingDetailProps) {
             column="place_id"
             subjectId={placeId}
             question={isStudent ? 'Could you find parking here?' : 'Could you find parking here after 5:30?'}
-            // The employee-lot prompt is long; shrink it so it stays on one line.
-            questionClassName={
-              isStudent ? undefined : 'text-xs font-medium whitespace-nowrap'
-            }
+            // The employee-lot prompt is long; shrink it so it wraps to two tidy
+            // lines instead of pushing the thumbs pills past the box edge.
+            questionClassName={isStudent ? undefined : 'text-xs font-medium'}
             onRequireSignIn={() => setShowSignIn(true)}
           />
 

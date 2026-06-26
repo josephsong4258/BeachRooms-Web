@@ -1,9 +1,10 @@
 'use client';
 import { useState } from 'react';
-import { Settings, HelpCircle, LogOut, Pencil, ChevronDown } from 'lucide-react';
+import { Settings, HelpCircle, ChevronDown, ChevronRight } from 'lucide-react';
 import EditHandleDialog from '@/components/EditHandleDialog';
 import DeleteAccountDialog from '@/components/DeleteAccountDialog';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Switch } from '@/components/ui/switch';
 import { useUser, signInWithProvider, signOut } from '@/lib/use-auth';
@@ -79,8 +80,8 @@ export default function SettingsMenu({ settings, onChange, isMobile }: SettingsM
     <>
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="outline" size="icon" className="h-8 w-8 shrink-0" aria-label="Settings">
-          <Settings className="h-3.5 w-3.5" />
+        <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" aria-label="Settings">
+          <Settings className="h-4 w-4" />
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-64 space-y-3">
@@ -96,27 +97,31 @@ export default function SettingsMenu({ settings, onChange, isMobile }: SettingsM
           checked={settings.showParking}
           onCheckedChange={(v) => onChange({ showParking: v })}
         />
-        {!isMobile && (
-          <SettingRow
-            label="Auto-center building"
-            help="When you open a building from the list, the map automatically centers on it."
-            checked={settings.autoCenter}
-            onCheckedChange={(v) => onChange({ autoCenter: v })}
-          />
-        )}
-        <div className="border-t pt-3">
+        <SettingRow
+          label="Auto-center building"
+          help="When you open a building from the list, the map automatically centers on it."
+          checked={settings.autoCenter}
+          onCheckedChange={(v) => onChange({ autoCenter: v })}
+        />
+        <div>
+          {/* Mobile: opens a centered dialog (inlining the list overflows the
+              popover). Desktop: expands inline, where there's room. */}
           <button
             type="button"
             onClick={() => setShowEtiquette((v) => !v)}
-            aria-expanded={showEtiquette}
-            className="flex w-full items-center justify-between gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground transition-colors hover:text-foreground"
+            aria-expanded={isMobile ? undefined : showEtiquette}
+            className="flex w-full items-center justify-between gap-2 text-sm font-medium transition-colors hover:text-muted-foreground"
           >
             Usage &amp; Etiquette
-            <ChevronDown
-              className={`h-4 w-4 shrink-0 transition-transform ${showEtiquette ? 'rotate-180' : ''}`}
-            />
+            {isMobile ? (
+              <ChevronRight className="h-4 w-4 shrink-0" />
+            ) : (
+              <ChevronDown
+                className={`h-4 w-4 shrink-0 transition-transform ${showEtiquette ? 'rotate-180' : ''}`}
+              />
+            )}
           </button>
-          {showEtiquette && (
+          {!isMobile && showEtiquette && (
             <ul className="mt-2 list-disc space-y-1.5 pl-4 text-xs text-muted-foreground">
               {ETIQUETTE.map((item) => (
                 <li key={item}>{item}</li>
@@ -126,29 +131,17 @@ export default function SettingsMenu({ settings, onChange, isMobile }: SettingsM
         </div>
         {user ? (
           <div className="space-y-2 border-t pt-3">
-            <div className="flex items-center justify-between gap-3">
-              <button
-                onClick={() => setShowEditHandle(true)}
-                aria-label="Change handle"
-                className="flex min-w-0 items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-              >
-                <span className="truncate">{handle ?? 'Signed in'}</span>
-                <Pencil className="h-3 w-3 shrink-0" />
-              </button>
-              <button
-                onClick={() => signOut()}
-                className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
-              >
-                <LogOut className="h-3.5 w-3.5" />
-                Sign out
-              </button>
-            </div>
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Account</p>
             <button
-              onClick={() => setShowDeleteAccount(true)}
-              className="text-xs text-muted-foreground transition-colors hover:text-destructive"
+              onClick={() => setShowEditHandle(true)}
+              aria-label="Account settings"
+              className="flex w-full min-w-0 items-center text-sm font-medium transition-colors hover:text-muted-foreground"
             >
-              Delete account
+              <span className="truncate">{handle ?? 'Signed in'}</span>
             </button>
+            <Button variant="outline" size="sm" onClick={() => signOut()} className="w-full">
+              Sign out
+            </Button>
           </div>
         ) : (
           <div className="border-t pt-3">
@@ -165,8 +158,25 @@ export default function SettingsMenu({ settings, onChange, isMobile }: SettingsM
         )}
       </PopoverContent>
     </Popover>
-    <EditHandleDialog open={showEditHandle} onOpenChange={setShowEditHandle} />
+    <EditHandleDialog
+      open={showEditHandle}
+      onOpenChange={setShowEditHandle}
+      onDeleteAccount={() => setShowDeleteAccount(true)}
+    />
     <DeleteAccountDialog open={showDeleteAccount} onOpenChange={setShowDeleteAccount} />
+    {/* Mobile: Usage & Etiquette as a centered dialog instead of inline. */}
+    <Dialog open={isMobile && showEtiquette} onOpenChange={setShowEtiquette}>
+      <DialogContent className="max-w-[90vw] rounded-2xl sm:max-w-sm sm:rounded-2xl">
+        <DialogHeader>
+          <DialogTitle>Usage &amp; Etiquette</DialogTitle>
+        </DialogHeader>
+        <ul className="list-disc space-y-1.5 pl-4 text-sm text-muted-foreground">
+          {ETIQUETTE.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
+      </DialogContent>
+    </Dialog>
     </>
   );
 }

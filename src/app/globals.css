@@ -95,12 +95,24 @@
   top: 100%;
   left: 50%;
   transform: translateX(-50%);
-  margin-top: -2px;
-  white-space: nowrap;
+  /* Pull the label up to the pin's point; scales with the pin so the gap
+     stays ~0 at every zoom level. */
+  margin-top: calc(var(--pin-size, 24px) * -0.22);
+  /* Long names wrap onto a second line instead of running off in one line.
+     Greedy wrapping (no balance) fills line 1 before dropping to line 2, so
+     e.g. "Health & Human Services 1" breaks as "Health & Human" / "Services 1".
+     Width holds ~16 chars before wrapping; nothing is ever cut off. */
+  white-space: normal;
+  /* width:max-content frees the label from the tiny pin box (its absolute
+     containing block); without it the label shrinks to the longest word and
+     stacks into many lines. max-width then caps it so long names wrap to 2. */
+  width: max-content;
+  max-width: 16ch;
+  text-align: center;
   font-size: var(--pin-font, 11px);
   font-weight: 700;
   line-height: 1.15;
-  color: #1f2937;
+  color: #4b5563;
   text-shadow:
     -1px -1px 0 #fff,
     1px -1px 0 #fff,
@@ -148,27 +160,44 @@
   color: #c9303a;
 }
 
+/* Numbered buildings: the trailing number sits on its own line under the name. */
+.building-marker-label .label-number {
+  display: block;
+}
+
+/* Overrides with an explicit "\n" render as stacked, centered lines. The box
+   shrink-wraps to the widest line, so it still hugs the pin. */
+.building-marker-label.label-multiline {
+  white-space: pre-line;
+}
+
 /* Label placement variants (default sits below the pin) */
 .building-marker-label.label-top {
   top: auto;
   bottom: 100%;
   margin-top: 0;
-  margin-bottom: -2px;
+  margin-bottom: calc(var(--pin-size, 24px) * -0.22);
+}
+
+/* Side-placed labels sit beside the pin where there's horizontal room, so they
+   don't need the below-pin wrap cap. Dropping it lets the box shrink-wrap to the
+   name (hugging the pin, no gap) while keeping lines centered — so a building
+   number on its own line still centers under the name. */
+.building-marker-label.label-right,
+.building-marker-label.label-left {
+  top: 50%;
+  margin-top: 0;
+  transform: translateY(-50%);
+  max-width: none;
 }
 
 .building-marker-label.label-right {
-  top: 50%;
   left: 100%;
-  margin-top: 0;
   margin-left: 1px;
-  transform: translateY(-50%);
 }
 
 .building-marker-label.label-left {
-  top: 50%;
   left: auto;
   right: 100%;
-  margin-top: 0;
   margin-right: 1px;
-  transform: translateY(-50%);
 }

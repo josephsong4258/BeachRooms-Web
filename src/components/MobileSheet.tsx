@@ -2,17 +2,16 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 
 // Mobile layout: the campus map fills the screen and this draggable sheet rides
-// over it (peek / half / full snap points), holding the Sidebar's list. When a
-// detail page is open (building / room / parking / library / spot) the sheet
-// becomes a full-screen slide-over instead — the Sidebar renders that detail
-// with its own back header. The Sidebar stays mounted across both modes so its
+// over it (peek / half / full snap points), holding the Sidebar's list. Opening
+// a detail page (building / room / parking / library / spot) keeps the sheet at
+// its current height and renders that detail inside it (with its own back
+// header), so the map stays visible above. The Sidebar stays mounted so its
 // search query and drill-down state survive.
 interface MobileSheetProps {
-  detailOpen: boolean;
   children: React.ReactNode;
 }
 
-export default function MobileSheet({ detailOpen, children }: MobileSheetProps) {
+export default function MobileSheet({ children }: MobileSheetProps) {
   const stageRef = useRef<HTMLDivElement>(null);
   const [stageH, setStageH] = useState(0);
   useEffect(() => {
@@ -82,31 +81,23 @@ export default function MobileSheet({ detailOpen, children }: MobileSheetProps) 
   return (
     <div ref={stageRef} className="pointer-events-none absolute inset-0 z-20">
       <div
-        className={
-          detailOpen
-            ? 'br-slideover pointer-events-auto absolute inset-0 flex flex-col bg-background'
-            : 'pointer-events-auto absolute inset-x-0 bottom-0 flex flex-col overflow-hidden rounded-t-[18px] bg-background'
-        }
-        style={
-          detailOpen
-            ? undefined
-            : {
-                height: sheetH,
-                boxShadow: '0 -8px 32px rgba(0,0,0,0.16)',
-                transition: dragging ? 'none' : 'height 300ms cubic-bezier(0.32,0.72,0,1)',
-              }
-        }
+        className="pointer-events-auto absolute inset-x-0 bottom-0 flex flex-col overflow-hidden rounded-t-[18px] bg-background"
+        style={{
+          height: sheetH,
+          boxShadow: '0 -8px 32px rgba(0,0,0,0.16)',
+          transition: dragging ? 'none' : 'height 300ms cubic-bezier(0.32,0.72,0,1)',
+        }}
       >
-        {/* Grabber / drag handle (kept mounted, hidden in detail mode so the
-            Sidebar below it never remounts) */}
+        {/* Grabber / drag handle — works for the list and detail pages alike,
+            so the sheet stays draggable while a building/room page is open. */}
         <div
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
-          className="flex shrink-0 cursor-grab justify-center pb-1 pt-2.5 active:cursor-grabbing"
-          style={{ touchAction: 'none', display: detailOpen ? 'none' : 'flex' }}
+          className="flex shrink-0 cursor-grab justify-center pb-2.5 pt-3.5 active:cursor-grabbing"
+          style={{ touchAction: 'none' }}
         >
-          <div className="h-[5px] w-9 rounded-full bg-muted-foreground/30" />
+          <div className="h-1.5 w-16 rounded-full bg-muted-foreground/30" />
         </div>
 
         <div className="min-h-0 flex-1 overflow-hidden">{children}</div>

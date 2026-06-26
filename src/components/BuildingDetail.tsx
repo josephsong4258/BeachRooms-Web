@@ -8,6 +8,7 @@ import StudySpotRow from '@/components/StudySpotRow';
 import { buildingNeighborhood } from '@/lib/neighborhoods';
 import { buildingImage } from '@/lib/building-images';
 import { effectiveHours } from '@/lib/building-hours';
+import { useReferenceNow } from '@/lib/reference-time';
 import { buildingStudySpots, type StudySpot } from '@/data/study-spots';
 import type { BuildingWithRooms, RoomAvailability } from '@/types';
 
@@ -20,6 +21,7 @@ interface BuildingDetailProps {
   onToggleFavoriteRoom: (id: string) => void;
   favoriteBuildingIds: Set<string>;
   onToggleFavoriteBuilding: (id: string) => void;
+  isMobile: boolean;
 }
 
 function formatClock(time: string): string {
@@ -42,11 +44,13 @@ function PhotoHero({
   imageSrc,
   available,
   total,
+  isMobile,
 }: {
   building: BuildingWithRooms;
   imageSrc: string | null;
   available: number;
   total: number;
+  isMobile: boolean;
 }) {
   const open = building.isOpen;
   const hasRoomsOpen = available > 0;
@@ -69,7 +73,7 @@ function PhotoHero({
   }
 
   return (
-    <div className="relative h-[210px] w-full shrink-0 overflow-hidden bg-muted">
+    <div className={`relative ${isMobile ? 'h-[140px]' : 'h-[210px]'} w-full shrink-0 overflow-hidden bg-muted`}>
       {imageSrc ? (
         <Image
           src={imageSrc}
@@ -112,6 +116,7 @@ export default function BuildingDetail({
   onToggleFavoriteRoom,
   favoriteBuildingIds,
   onToggleFavoriteBuilding,
+  isMobile,
 }: BuildingDetailProps) {
   const isFavorite = favoriteBuildingIds.has(building.id);
   const accessible = building.rooms.some((r) => r.is_accessible);
@@ -120,15 +125,18 @@ export default function BuildingDetail({
   const spots = buildingStudySpots(building.code);
   // Prefer a DB-provided photo; otherwise use the bundled one for this code.
   const imageSrc = building.imageUrl ?? buildingImage(building.code);
+  // Reference time: the time-travelled time when set, else real now. Drives the
+  // hours shown and the available/opening-soon/occupied grouping below.
+  const now = useReferenceNow();
   // Today's effective hours (folds in per-building overrides); null = closed today.
   const todayHours = effectiveHours(
     building.code,
     building.weekday_open,
     building.weekday_close,
-    new Date()
+    now
   );
 
-  const grouped = groupRooms(building.rooms);
+  const grouped = groupRooms(building.rooms, now.getTime());
   const available = grouped.available;
   const openingSoon = grouped.openingSoon;
   const occupied = grouped.occupied;
@@ -142,7 +150,7 @@ export default function BuildingDetail({
   return (
     <div className="flex h-full flex-col">
       {/* Header — same shape as RoomDetail */}
-      <div className="flex items-start gap-2 border-b p-4">
+      <div className="flex items-center gap-2 border-b px-3 py-2">
         <Button variant="ghost" size="icon" onClick={onBack} className="shrink-0">
           <ArrowLeft className="h-4 w-4" />
         </Button>
@@ -175,10 +183,10 @@ export default function BuildingDetail({
       </div>
 
       <ScrollArea className="flex-1">
-        <PhotoHero building={building} imageSrc={imageSrc} available={available.length} total={building.rooms.length} />
+        <PhotoHero building={building} imageSrc={imageSrc} available={available.length} total={building.rooms.length} isMobile={isMobile} />
 
         {/* Meta strip — hours + accessibility */}
-        <div className="flex items-center gap-4 border-b px-4 py-3 text-[13px] text-muted-foreground">
+        <div className={`flex items-center gap-4 border-b px-4 text-[13px] text-muted-foreground ${isMobile ? 'py-2' : 'py-3'}`}>
           <span className="inline-flex items-center gap-1.5">
             <Calendar className="h-3.5 w-3.5" />
             {building.closedForSemester ? (
@@ -224,7 +232,7 @@ export default function BuildingDetail({
 
         {/* Rooms (or closed message) */}
         {building.isOpen ? (
-          <div className="flex flex-col gap-4 px-4 pb-5 pt-4">
+          <div className={`flex flex-col px-4 pb-5 ${isMobile ? 'gap-3 pt-2' : 'gap-4 pt-4'}`}>
             {groups.map(
               (g) =>
                 g.rooms.length > 0 && (

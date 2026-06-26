@@ -14,6 +14,7 @@ import {
 interface LibraryDetailProps {
   onBack: () => void;
   onOpenFloor: (floorId: string) => void;
+  isMobile: boolean;
 }
 
 function formatClock(time: string): string {
@@ -22,13 +23,13 @@ function formatClock(time: string): string {
   return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${ampm}`;
 }
 
-export default function LibraryDetail({ onBack, onOpenFloor }: LibraryDetailProps) {
+export default function LibraryDetail({ onBack, onOpenFloor, isMobile }: LibraryDetailProps) {
   const open = isLibraryOpen();
   const todayHours = libraryHoursToday();
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-start gap-2 border-b p-4">
+      <div className="flex items-center gap-2 border-b px-3 py-2">
         <Button variant="ghost" size="icon" onClick={onBack} className="shrink-0">
           <ArrowLeft className="h-4 w-4" />
         </Button>
@@ -45,7 +46,7 @@ export default function LibraryDetail({ onBack, onOpenFloor }: LibraryDetailProp
           wrapper to `block` makes it fill the width and lets truncate work. */}
       <ScrollArea className="flex-1 [&_[data-radix-scroll-area-viewport]>div]:!block">
         {/* Photo hero */}
-        <div className="relative h-[210px] w-full shrink-0 overflow-hidden bg-muted">
+        <div className={`relative ${isMobile ? 'h-[140px]' : 'h-[210px]'} w-full shrink-0 overflow-hidden bg-muted`}>
           <Image
             src={LIBRARY_IMAGE}
             alt="University Library"
@@ -68,7 +69,7 @@ export default function LibraryDetail({ onBack, onOpenFloor }: LibraryDetailProp
         </div>
 
         {/* Hours */}
-        <div className="flex items-center gap-4 border-b px-4 py-3 text-[13px] text-muted-foreground">
+        <div className={`flex items-center gap-4 border-b px-4 text-[13px] text-muted-foreground ${isMobile ? 'py-2' : 'py-3'}`}>
           <span className="inline-flex items-center gap-1.5">
             <Calendar className="h-3.5 w-3.5" />
             {todayHours ? (
@@ -86,7 +87,7 @@ export default function LibraryDetail({ onBack, onOpenFloor }: LibraryDetailProp
 
         {/* Floors, listed Lower Level → 5th. One ordered list: the noise icon
             on each row marks quiet vs. collaborative, so no further grouping. */}
-        <div className="p-4">
+        <div className={`px-4 pb-4 ${isMobile ? 'pt-2' : 'pt-4'}`}>
           <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Floors
             <span className="text-muted-foreground/60"> · {LIBRARY.floors.length}</span>

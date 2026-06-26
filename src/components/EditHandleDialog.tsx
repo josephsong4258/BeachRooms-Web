@@ -8,9 +8,11 @@ import { useProfile, HANDLE_PATTERN, HANDLE_RULES } from '@/lib/use-profile';
 interface EditHandleDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  // Opens the delete-account flow (closes this dialog first to avoid stacking).
+  onDeleteAccount?: () => void;
 }
 
-export default function EditHandleDialog({ open, onOpenChange }: EditHandleDialogProps) {
+export default function EditHandleDialog({ open, onOpenChange, onDeleteAccount }: EditHandleDialogProps) {
   const { handle, updateHandle } = useProfile();
   const [value, setValue] = useState('');
 
@@ -60,6 +62,20 @@ export default function EditHandleDialog({ open, onOpenChange }: EditHandleDialo
             {updateHandle.isPending ? 'Saving…' : 'Save'}
           </Button>
         </form>
+        {onDeleteAccount && (
+          <div className="border-t pt-3">
+            <button
+              type="button"
+              onClick={() => {
+                onOpenChange(false);
+                onDeleteAccount();
+              }}
+              className="w-full text-sm font-medium text-destructive transition-colors hover:underline"
+            >
+              Delete my account
+            </button>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );
