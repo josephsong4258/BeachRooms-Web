@@ -49,7 +49,13 @@ export default function FilterMenu({ filters, onChange, className }: FilterMenuP
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-64 space-y-4">
+      <PopoverContent
+        align="end"
+        // Don't auto-focus the first field (the time input) on open — on mobile
+        // that pops the native time picker the moment you tap the filter button.
+        onOpenAutoFocus={(e) => e.preventDefault()}
+        className="w-64 space-y-4"
+      >
         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Filters</p>
 
         {/* Start time */}
