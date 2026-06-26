@@ -137,7 +137,7 @@ export default function FilterMenu({ filters, onChange, className, isMobile = fa
         <DialogContent
           // Don't auto-focus the time input on open (pops the native picker).
           onOpenAutoFocus={(e) => e.preventDefault()}
-          className="max-w-[90vw] space-y-4 rounded-2xl sm:max-w-sm sm:rounded-2xl"
+          className="grid-cols-1 max-w-[90vw] rounded-2xl sm:max-w-sm sm:rounded-2xl"
         >
           <DialogHeader>
             <DialogTitle>Filters</DialogTitle>
