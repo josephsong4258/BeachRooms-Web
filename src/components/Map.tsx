@@ -10,9 +10,9 @@ const CSULB_CENTER: [number, number] = [-118.113603, 33.778675];
 const INITIAL_ZOOM = 17.20;
 // Mobile has its own starting camera (the bottom sheet covers the lower half of
 // the map, so it's framed tighter and shifted to keep the campus core visible).
-const MOBILE_INITIAL_ZOOM = 16.8;
-const MOBILE_INITIAL_PITCH = 57.56;
-const MOBILE_INITIAL_BEARING = 17.6;
+const MOBILE_INITIAL_ZOOM = 16.6;
+const MOBILE_INITIAL_PITCH = 48;
+const MOBILE_INITIAL_BEARING = 21.6;
 const MOBILE_CENTER: [number, number] = [-118.112988, 33.778226];
 // Pins/labels render smaller on mobile so they don't crowd the narrow viewport
 const MOBILE_PIN_SCALE = 0.7;
@@ -340,8 +340,11 @@ export default function Map({
       const el = marker.getElement();
       (el.querySelector('img') as HTMLImageElement).src = pinUrl(b);
       const label = el.querySelector('.building-marker-label') as HTMLDivElement;
-      const override = isMobileRef.current ? undefined : NAME_OVERRIDES[b.code];
-      const labelText = override ?? (isMobileRef.current ? (b.code ?? b.name) : (b.name ?? b.code));
+      // Full building names on both desktop and mobile — codes (e.g. "ECS")
+      // mean nothing to a student who doesn't already know them. The shortened
+      // NAME_OVERRIDES (e.g. "Eng. 2") apply on both and help mobile crowding.
+      const override = NAME_OVERRIDES[b.code];
+      const labelText = override ?? (b.name ?? b.code);
       // Numbered buildings whose name fits on one line (e.g. "Liberal Arts 1",
       // "Fine Arts 4") read better with the trailing number dropped to its own
       // line. Longer names (e.g. "Health & Human Services 1") fall through and
