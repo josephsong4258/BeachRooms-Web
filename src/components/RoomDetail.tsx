@@ -52,6 +52,9 @@ function formatDuration(minutes: number): string {
 
 // Same phrasing as the room cards in the sidebar list
 function StatusLine({ room, building }: { room: RoomAvailability; building: BuildingWithRooms }) {
+  // Campus time (or the time-travelled instant) so the close label matches the
+  // day the availability data was computed for.
+  const referenceNow = useReferenceNow();
   if (room.isAvailable) {
     if (room.nextClassStartsAt && room.minutesUntilNextClass != null) {
       return (
@@ -66,7 +69,7 @@ function StatusLine({ room, building }: { room: RoomAvailability; building: Buil
       building.code,
       building.weekday_open,
       building.weekday_close,
-      new Date()
+      referenceNow
     )?.close;
     if (room.availableDurationMinutes != null && todayClose) {
       const [h, m] = todayClose.split(':').map(Number);

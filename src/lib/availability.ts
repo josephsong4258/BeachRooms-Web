@@ -5,18 +5,14 @@ import type {
   AvailabilityStatus,
 } from '@/types';
 import { effectiveHours } from '@/lib/building-hours';
+import { campusNow } from '@/lib/campus-time';
 
 // All math in this module uses local-time Date methods (getDay/setHours), so
 // "now" must be campus wall-clock time. The server's own timezone can't be
 // trusted (Vercel runs UTC, where every Pacific evening reads as the next
-// day's small hours).
-const CAMPUS_TIME_ZONE = 'America/Los_Angeles';
-
-export function campusNow(): Date {
-  // A Date whose local fields hold campus wall-clock time. Only its local
-  // fields are meaningful — it is not the true instant.
-  return new Date(new Date().toLocaleString('en-US', { timeZone: CAMPUS_TIME_ZONE }));
-}
+// day's small hours). campusNow() (see lib/campus-time.ts) produces such
+// Dates and is re-exported here for existing importers.
+export { campusNow } from '@/lib/campus-time';
 
 // Serialize a Date whose *local* fields hold campus wall-clock time into a
 // naive datetime string (no timezone designator). `toISOString()` can't be
@@ -32,7 +28,7 @@ export function toCampusWallClockString(date: Date): string {
   );
 }
 
-export function parseTimeToday(timeString: string, referenceDate: Date = new Date()): Date {
+export function parseTimeToday(timeString: string, referenceDate: Date = campusNow()): Date {
   const parts = timeString.split(':').map(Number);
   const hours = parts[0];
   const minutes = parts[1];
@@ -44,7 +40,7 @@ export function parseTimeToday(timeString: string, referenceDate: Date = new Dat
 
 export function isBuildingOpen(
   building: ClassroomWithBuilding['building'],
-  now: Date = new Date()
+  now: Date = campusNow()
 ): { isOpen: boolean; opensAt: Date | null; closesAt: Date | null } {
   // Effective hours fold in any per-building override (e.g. Horn Center's
   // summer Mon–Thu 8–5 / closed-Friday schedule) and the weekend default.
@@ -141,7 +137,7 @@ export function findNextUsableWindow(
 export function calculateAvailability(
   classroom: ClassroomWithBuilding,
   schedules: ClassSchedule[],
-  now: Date = new Date()
+  now: Date = campusNow()
 ): ClassroomAvailability {
   const dayOfWeek = now.getDay();
   const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;

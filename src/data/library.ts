@@ -1,6 +1,7 @@
 // The University Library — a special place (not a scraped classroom building).
 // Its floors are browsable, rateable sub-pages keyed by place id 'library:<id>'.
 import { effectiveHours, nextOpeningDate } from '@/lib/building-hours';
+import { campusNow } from '@/lib/campus-time';
 import type { StudyNoise, StudySpot } from '@/data/study-spots';
 
 export type StudyType = StudyNoise;
@@ -54,11 +55,11 @@ export function libraryFloorSpot(floor: LibraryFloor): StudySpot {
 // The library overview hero (a dedicated exterior shot, not tied to any floor).
 export const LIBRARY_IMAGE = '/assets/library/hero.webp';
 
-export function libraryHoursToday(date: Date = new Date()) {
+export function libraryHoursToday(date: Date = campusNow()) {
   return effectiveHours(LIBRARY.hoursCode, null, null, date);
 }
 
-export function isLibraryOpen(date: Date = new Date()): boolean {
+export function isLibraryOpen(date: Date = campusNow()): boolean {
   const hrs = libraryHoursToday(date);
   if (!hrs) return false;
   const [oh, om] = hrs.open.split(':').map(Number);
@@ -67,6 +68,6 @@ export function isLibraryOpen(date: Date = new Date()): boolean {
   return mins >= oh * 60 + om && mins <= ch * 60 + cm;
 }
 
-export function nextLibraryOpening(from: Date = new Date()): Date | null {
+export function nextLibraryOpening(from: Date = campusNow()): Date | null {
   return nextOpeningDate(LIBRARY.hoursCode, null, null, from);
 }

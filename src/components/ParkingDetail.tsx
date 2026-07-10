@@ -7,7 +7,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import Rating from '@/components/Rating';
 import Comments from '@/components/Comments';
 import SignInDialog from '@/components/SignInDialog';
-import { isParkingOpenNow, type ParkingLot } from '@/data/parking';
+import { isParkingOpenNow, minutesUntilEmployeeOpen, type ParkingLot } from '@/data/parking';
 import { parkingImage } from '@/lib/parking-images';
 
 interface ParkingDetailProps {
@@ -43,8 +43,7 @@ function AccessNote({ open }: { open: boolean }) {
     );
   }
   // Restricted right now: it's a weekday before 5:30 PM; count down to it.
-  const now = new Date();
-  const minutesUntilOpen = 17 * 60 + 30 - (now.getHours() * 60 + now.getMinutes());
+  const minutesUntilOpen = minutesUntilEmployeeOpen();
   const h = Math.floor(minutesUntilOpen / 60);
   const m = minutesUntilOpen % 60;
   const countdown = h > 0 ? `${h}h ${m}m` : `${m}m`;

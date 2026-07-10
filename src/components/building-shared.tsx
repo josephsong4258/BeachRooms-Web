@@ -5,6 +5,7 @@
 import Image from 'next/image';
 import { ChevronRight, Star } from 'lucide-react';
 import { nextOpeningDate } from '@/lib/building-hours';
+import { campusNow } from '@/lib/campus-time';
 import { useReferenceNow } from '@/lib/reference-time';
 import type { BuildingWithRooms, RoomAvailability } from '@/types';
 
@@ -35,7 +36,7 @@ export function classifyRoom(room: RoomAvailability, now: number): RoomGroup {
   return 'occupied';
 }
 
-export function groupRooms(rooms: RoomAvailability[], now: number = Date.now()) {
+export function groupRooms(rooms: RoomAvailability[], now: number = campusNow().getTime()) {
   const available: RoomAvailability[] = [];
   const openingSoon: RoomAvailability[] = [];
   const occupied: RoomAvailability[] = [];
@@ -130,12 +131,11 @@ const DAY_NAMES = [
 
 // Next time a closed building opens, as a day/time label. Delegates to the
 // shared hours helper so per-building overrides (e.g. Horn Center closed
-// Fridays) are reflected. Uses local time, matching the rest of the client
-// (campus is Pacific; users browse on-campus).
+// Fridays) are reflected. Uses campus time, matching the rest of the client.
 export function nextOpening(
   building: BuildingWithRooms
 ): { dayLabel: string; timeLabel: string } | null {
-  const now = new Date();
+  const now = campusNow();
   const opensAt = nextOpeningDate(
     building.code,
     building.weekday_open,

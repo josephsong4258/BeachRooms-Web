@@ -20,6 +20,7 @@ import FilterMenu, { EMPTY_FILTERS, type RoomFilters } from '@/components/Filter
 import SignInDialog from '@/components/SignInDialog';
 import { useFavorites } from '@/lib/use-favorites';
 import { effectiveHours } from '@/lib/building-hours';
+import { campusNow } from '@/lib/campus-time';
 import type { BuildingWithRooms, RoomAvailability } from '@/types';
 
 function parseMinutes(t: string): number {
@@ -129,10 +130,10 @@ export default function Sidebar({
     const listable = buildings.filter((b) => !b.closedForSemester);
     if (!groupStudyOnly && !hasWindow) return listable;
 
-    // The window always starts at the current reference time (now, or the
-    // Time-Travel instant) and runs for the requested duration, so the filter
-    // means "rooms free for at least N hours from here".
-    const refDate = selectedDateTime ?? new Date();
+    // The window always starts at the current reference time (campus-now, or
+    // the Time-Travel instant) and runs for the requested duration, so the
+    // filter means "rooms free for at least N hours from here".
+    const refDate = selectedDateTime ?? campusNow();
     let windowStartMin = 0;
     let windowEndMin = 0;
     if (hasWindow) {

@@ -4,6 +4,7 @@ import { Calendar, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { campusNow } from '@/lib/campus-time';
 import { formatTimeDisplay } from '@/lib/time-utils';
 
 // Time-travel control: a trigger pill ("Now" or the picked time) plus the
@@ -34,7 +35,9 @@ export default function TimeTravel({
   const isCustomTime = selectedDateTime !== null;
 
   function openDatePicker() {
-    const now = selectedDateTime ?? new Date();
+    // Prefill with campus time: the picked value is interpreted as campus
+    // wall-clock by the API, so the default should read as campus time too.
+    const now = selectedDateTime ?? campusNow();
     const y = now.getFullYear();
     const m = String(now.getMonth() + 1).padStart(2, '0');
     const d = String(now.getDate()).padStart(2, '0');

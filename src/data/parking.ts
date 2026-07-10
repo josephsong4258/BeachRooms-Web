@@ -5,6 +5,8 @@
 // except this file is bundled with the app, so changes need a deploy, not a
 // cache refresh).
 
+import { campusNow } from '@/lib/campus-time';
+
 export type ParkingType = 'student' | 'employee';
 
 export interface ParkingLot {
@@ -28,16 +30,26 @@ export interface ParkingLot {
 }
 
 // Employee lots allow general (student) parking on weekdays after 5:30 PM and
-// all day Saturday and Sunday.
-export function isEmployeeLotOpenToAll(d: Date = new Date()): boolean {
+// all day Saturday and Sunday. All checks use campus time, not the viewer's
+// local clock.
+const EMPLOYEE_OPEN_MINUTES = 17 * 60 + 30; // 5:30 PM
+
+export function isEmployeeLotOpenToAll(d: Date = campusNow()): boolean {
   const day = d.getDay();
   if (day === 0 || day === 6) return true;
-  return d.getHours() > 17 || (d.getHours() === 17 && d.getMinutes() >= 30);
+  return d.getHours() * 60 + d.getMinutes() >= EMPLOYEE_OPEN_MINUTES;
 }
 
 // True when a student can park in this lot right now.
-export function isParkingOpenNow(lot: ParkingLot, d: Date = new Date()): boolean {
+export function isParkingOpenNow(lot: ParkingLot, d: Date = campusNow()): boolean {
   return lot.type === 'student' || isEmployeeLotOpenToAll(d);
+}
+
+// Minutes until the 5:30 PM employee-lot opening. Only meaningful while a lot
+// is restricted (a weekday before 5:30 PM), which is the only time callers
+// render the countdown.
+export function minutesUntilEmployeeOpen(d: Date = campusNow()): number {
+  return EMPLOYEE_OPEN_MINUTES - (d.getHours() * 60 + d.getMinutes());
 }
 
 export const PARKING_LOTS: ParkingLot[] = [
