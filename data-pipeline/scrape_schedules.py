@@ -18,7 +18,7 @@ import requests
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 
-SEMESTER = "Summer 2026"
+SEMESTER = "Fall 2026"
 BASE_URL = (
     "https://web.csulb.edu/depts/enrollment/registration/class_schedule/"
     f"{SEMESTER.replace(' ', '_')}/By_Subject/"
@@ -28,12 +28,11 @@ REQUEST_DELAY = 1.0  # seconds between page fetches
 DEFAULT_CAPACITY = 30  # schedule pages don't include room capacity
 
 # Fixed building hours — schedule pages don't list hours, so assume every
-# building is open 8:00 AM to 9:00 PM on weekdays (weekends treated as closed
-# by the app regardless of these values). Buildings that host later evening
-# classes are bumped to 10 PM via per-building overrides in
-# src/lib/building-hours.ts.
+# building is open 8:00 AM to 10:00 PM on weekdays (weekends treated as closed
+# by the app regardless of these values). Per-building exceptions (e.g. Horn
+# Center's early Friday close) live as overrides in src/lib/building-hours.ts.
 BUILDING_OPEN = "08:00:00"
-BUILDING_CLOSE = "21:00:00"
+BUILDING_CLOSE = "22:00:00"
 
 # Locations to skip — not real buildings/classrooms
 SKIP_LOCATIONS = {"ONLINE-ONLY", "OFF-CAMP", "TBA", "NA", ""}
