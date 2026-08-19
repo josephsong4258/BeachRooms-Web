@@ -119,7 +119,6 @@ def parse_time_range(time_str: str) -> tuple[dt_time, dt_time]:
 
 
 def extract_floor(room_number: str) -> int | None:
-    """Infer floor number from room number. '413' -> 4, '051' -> 0."""
     digits = re.search(r"(\d+)", room_number)
     if not digits:
         return None
