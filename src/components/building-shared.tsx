@@ -3,7 +3,7 @@
 // (BuildingList) and the building page (BuildingDetail). Extracted from the
 // former BuildingAccordion so the two views render rooms identically.
 import Image from 'next/image';
-import { ChevronRight, Star } from 'lucide-react';
+import { Star } from 'lucide-react';
 import { nextOpeningDate } from '@/lib/building-hours';
 import { campusNow } from '@/lib/campus-time';
 import { useReferenceNow } from '@/lib/reference-time';
@@ -79,15 +79,6 @@ function PinIcon({ type }: { type: RoomGroup }) {
         ? '/assets/pins/pin-amber.png'
         : '/assets/pins/pin-red.png';
   return <Image src={src} alt="" width={22} height={22} className="shrink-0" />;
-}
-
-function CountdownChip({ minutes }: { minutes: number }) {
-  const label = minutes <= 1 ? 'Free in <1 min' : `Free in ${minutes} min`;
-  return (
-    <span className="rounded-full border border-[#f5d78a] bg-[#fef6e6] px-2 py-0.5 text-[11px] font-semibold text-[#b5850b]">
-      {label}
-    </span>
-  );
 }
 
 export function CountBadge({
@@ -186,41 +177,58 @@ export function ClosedPanel({ building }: { building: BuildingWithRooms }) {
   );
 }
 
-function StatusText({ room, type }: { room: RoomAvailability; type: RoomGroup }) {
-  if (type === 'available' && room.nextClassStartsAt && room.minutesUntilNextClass != null) {
-    return (
-      <p className="mt-0.5 text-[13px] text-muted-foreground">
-        Free until <span className="font-bold">{formatTime(new Date(room.nextClassStartsAt))}</span>{' '}
-        · <span className="font-bold">{formatDuration(room.minutesUntilNextClass)}</span> left
-      </p>
-    );
-  }
+// Course code of the class currently in the room, matched to currentClassEndsAt.
+// The serialized room carries no "current class" field, but todaySchedules does,
+// so we look up the class whose end time is the one that frees the room.
+function currentClassCourse(room: RoomAvailability): string | null {
+  if (!room.currentClassEndsAt) return null;
+  const ends = new Date(room.currentClassEndsAt);
+  const hhmm = `${String(ends.getHours()).padStart(2, '0')}:${String(ends.getMinutes()).padStart(2, '0')}`;
+  const current = room.todaySchedules.find((s) => s.end_time.startsWith(hhmm));
+  return current?.course_code ?? null;
+}
 
+function StatusText({ room, type }: { room: RoomAvailability; type: RoomGroup }) {
   if (type === 'available') {
-    // "Free until 11:00 PM (2h 30m)"
-    const m = room.statusText.match(/Free until (.+?\s[AP]M)\s*\((.+?)\)/);
-    if (m) {
+    if (room.nextClassStartsAt) {
       return (
         <p className="mt-0.5 text-[13px] text-muted-foreground">
-          Free until <span className="font-bold">{m[1]}</span> · <span className="font-bold">{m[2]}</span> left
+          Free until <span className="font-semibold text-foreground">{formatTime(new Date(room.nextClassStartsAt))}</span>
         </p>
       );
     }
     // "9:00 AM - 11:00 PM\n(14h free)" — produced when there are no more classes today
-    const m2 = room.statusText.match(/[\d:]+\s[AP]M\s*-\s*(.+?\s[AP]M)\s*\n?\((.+?)\s*free\)/);
-    if (m2) {
+    const m = room.statusText.match(/[\d:]+\s[AP]M\s*-\s*(.+?\s[AP]M)/);
+    if (m) {
       return (
         <p className="mt-0.5 text-[13px] text-muted-foreground">
-          Free until <span className="font-bold">{m2[1]}</span> · <span className="font-bold">{m2[2]}</span> left
+          Free until <span className="font-semibold text-foreground">{m[1]}</span>
         </p>
       );
     }
   }
 
   if (type === 'openingSoon' && room.currentClassEndsAt) {
+    // statusText is "Free at <time> for <duration>"; reuse its duration.
+    const m = room.statusText.match(/Free at .+?\s[AP]M for (.+)/);
     return (
       <p className="mt-0.5 text-[13px] text-muted-foreground">
-        Free at <span className="font-bold">{formatTime(new Date(room.currentClassEndsAt))}</span>
+        Free at <span className="font-semibold text-foreground">{formatTime(new Date(room.currentClassEndsAt))}</span>
+        {m && (
+          <>
+            {' '}for <span className="font-semibold text-foreground">{m[1]}</span>
+          </>
+        )}
+      </p>
+    );
+  }
+
+  if (type === 'occupied' && room.currentClassEndsAt) {
+    const course = currentClassCourse(room);
+    return (
+      <p className="mt-0.5 text-[13px] text-muted-foreground line-clamp-1">
+        Occupied{course ? ` by ${course}` : ''} until{' '}
+        <span className="font-semibold text-foreground">{formatTime(new Date(room.currentClassEndsAt))}</span>
       </p>
     );
   }
@@ -230,7 +238,7 @@ function StatusText({ room, type }: { room: RoomAvailability; type: RoomGroup })
     if (m) {
       return (
         <p className="mt-0.5 text-[13px] text-muted-foreground">
-          Free at <span className="font-bold">{m[1]}</span>
+          Free at <span className="font-semibold text-foreground">{m[1]}</span>
         </p>
       );
     }
@@ -240,6 +248,48 @@ function StatusText({ room, type }: { room: RoomAvailability; type: RoomGroup })
     <p className="mt-0.5 text-[13px] text-muted-foreground line-clamp-1">
       {room.statusText.split('\n')[0]}
     </p>
+  );
+}
+
+// Right-edge duration for a room row. Available shows time left, opening-soon
+// shows time until it frees, occupied shows a bare "Occupied" label.
+function DurationBlock({
+  room,
+  type,
+  minutesUntilFree,
+}: {
+  room: RoomAvailability;
+  type: RoomGroup;
+  minutesUntilFree: number | null;
+}) {
+  // Occupied rows carry their status in the line itself ("Occupied by … until
+  // …"); a repeated red label down a long list is more distracting than useful.
+  if (type === 'occupied') return null;
+
+  if (type === 'openingSoon') {
+    if (minutesUntilFree === null) return null;
+    const label = minutesUntilFree <= 1 ? '<1 min' : `${minutesUntilFree} min`;
+    return (
+      <div className="ml-2 shrink-0 text-right">
+        <div className="text-sm font-semibold tabular-nums text-[#b5850b]">{label}</div>
+        <div className="text-[10px] font-semibold uppercase tracking-[0.09em] text-muted-foreground">
+          until free
+        </div>
+      </div>
+    );
+  }
+
+  const minutesLeft = room.minutesUntilNextClass ?? room.availableDurationMinutes;
+  if (minutesLeft === null) return null;
+  return (
+    <div className="ml-2 shrink-0 text-right">
+      <div className="text-sm font-semibold tabular-nums text-foreground">
+        {formatDuration(minutesLeft)}
+      </div>
+      <div className="text-[10px] font-semibold uppercase tracking-[0.09em] text-muted-foreground">
+        left
+      </div>
+    </div>
   );
 }
 
@@ -292,9 +342,10 @@ export function RoomRow({
       : null;
 
   // Wrapper is a div (not a button) so the star can be its own button —
-  // nested buttons are invalid HTML
+  // nested buttons are invalid HTML. The duration owns the right edge; there is
+  // no chevron, since every row is clickable so an arrow distinguished nothing.
   return (
-    <div className="flex w-full items-center border-b border-border/60 py-2 transition-colors last:border-b-0 hover:bg-accent/40">
+    <div className="flex w-full items-center border-b border-border/60 py-2 transition-colors last:border-b-0 hover:bg-accent/40 active:bg-accent">
       <FavoriteStar
         active={isFavorite}
         onToggle={onToggleFavorite}
@@ -303,15 +354,14 @@ export function RoomRow({
       <button onClick={onClick} className="flex min-w-0 flex-1 items-center text-left">
         <PinIcon type={type} />
         <div className="ml-2.5 min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold">
-              {buildingCode} {room.room_number}
-            </span>
-            {minutesUntilFree !== null && <CountdownChip minutes={minutesUntilFree} />}
-          </div>
+          <span
+            className={`text-sm font-semibold ${type === 'occupied' ? 'text-muted-foreground' : ''}`}
+          >
+            {buildingCode} {room.room_number}
+          </span>
           <StatusText room={room} type={type} />
         </div>
-        <ChevronRight className="ml-2 h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
+        <DurationBlock room={room} type={type} minutesUntilFree={minutesUntilFree} />
       </button>
     </div>
   );

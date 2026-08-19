@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import Image from 'next/image';
 import { ArrowLeft, Accessibility, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -22,15 +23,13 @@ interface RoomDetailProps {
   isMobile?: boolean;
 }
 
-// Status card styling per availability state (matches the building pill palette).
-const STATUS_CARD: Record<
-  AvailabilityStatus,
-  { label: string; box: string; dot: string; text: string }
-> = {
-  open: { label: 'Open now', box: 'border-[#7ee8a0] bg-[#e6f9ec]', dot: 'bg-[#1a9e3f]', text: 'text-[#1a9e3f]' },
-  limited: { label: 'Limited', box: 'border-[#f0c879] bg-[#fdf4e3]', dot: 'bg-[#b7791f]', text: 'text-[#b7791f]' },
-  in_use: { label: 'In use', box: 'border-[#f5a3ab] bg-[#fde8ea]', dot: 'bg-[#c9303a]', text: 'text-[#c9303a]' },
-  closed: { label: 'Closed', box: 'border-[#d4d4d8] bg-[#f4f4f5]', dot: 'bg-[#6b7280]', text: 'text-[#6b7280]' },
+// Status pin, label, and left-rule color per availability state. The label is
+// rendered uppercase; the fg drives both the label text and the 2px rule.
+const STATUS_PANEL: Record<AvailabilityStatus, { pin: string; fg: string; label: string }> = {
+  open: { pin: '/assets/pins/pin-green.png', fg: '#1a9e3f', label: 'Open now' },
+  limited: { pin: '/assets/pins/pin-amber.png', fg: '#b5850b', label: 'Limited' },
+  in_use: { pin: '/assets/pins/pin-red.png', fg: '#c9303a', label: 'In use' },
+  closed: { pin: '/assets/pins/pin-gray.png', fg: '#6b7280', label: 'Closed' },
 };
 
 // One block per hour, 8 AM through 9 PM
@@ -43,11 +42,12 @@ function formatClockTime(d: Date): string {
   return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${ampm}`;
 }
 
-function formatDuration(minutes: number): string {
+// Zero-padded so the panel's duration block reads "2h 00m" / "2h 30m".
+function formatDurationPadded(minutes: number): string {
   if (minutes < 60) return `${minutes}m`;
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
-  return m === 0 ? `${h}h` : `${h}h ${m}m`;
+  return `${h}h ${String(m).padStart(2, '0')}m`;
 }
 
 // Same phrasing as the room cards in the sidebar list
@@ -56,11 +56,12 @@ function StatusLine({ room, building }: { room: RoomAvailability; building: Buil
   // day the availability data was computed for.
   const referenceNow = useReferenceNow();
   if (room.isAvailable) {
-    if (room.nextClassStartsAt && room.minutesUntilNextClass != null) {
+    // The duration ("2h 00m left") is shown in the panel's right-side block, so
+    // the line itself carries only the "free until" time.
+    if (room.nextClassStartsAt) {
       return (
         <>
-          Free until <span className="font-bold">{formatClockTime(new Date(room.nextClassStartsAt))}</span>{' '}
-          · <span className="font-bold">{formatDuration(room.minutesUntilNextClass)}</span> left
+          Free until <span className="font-bold">{formatClockTime(new Date(room.nextClassStartsAt))}</span>
         </>
       );
     }
@@ -71,14 +72,13 @@ function StatusLine({ room, building }: { room: RoomAvailability; building: Buil
       building.weekday_close,
       referenceNow
     )?.close;
-    if (room.availableDurationMinutes != null && todayClose) {
+    if (todayClose) {
       const [h, m] = todayClose.split(':').map(Number);
       const ampm = h >= 12 ? 'PM' : 'AM';
       const closeLabel = `${h % 12 || 12}:${String(m).padStart(2, '0')} ${ampm}`;
       return (
         <>
-          Free until <span className="font-bold">{closeLabel}</span>{' '}
-          · <span className="font-bold">{formatDuration(room.availableDurationMinutes)}</span> left
+          Free until <span className="font-bold">{closeLabel}</span>
         </>
       );
     }
@@ -106,7 +106,12 @@ export default function RoomDetail({ room, building, onBack, isMobile = false }:
   const now = useReferenceNow();
   const currentHour = now.getHours();
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
-  const statusCard = STATUS_CARD[room.status];
+  const statusPanel = STATUS_PANEL[room.status];
+  // Time left is only meaningful while the room is open; occupied/closed rooms
+  // show no right-side duration.
+  const minutesLeft = room.isAvailable
+    ? room.minutesUntilNextClass ?? room.availableDurationMinutes
+    : null;
 
   const sortedSchedules = [...room.todaySchedules].sort((a, b) =>
     a.start_time.localeCompare(b.start_time)
@@ -183,15 +188,35 @@ export default function RoomDetail({ room, building, onBack, isMobile = false }:
 
       <ScrollArea className="flex-1">
         <div className="p-4 space-y-5">
-          {/* Status card */}
-          <div className={`rounded-xl border px-4 py-3 ${statusCard.box}`}>
-            <div className={`flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide ${statusCard.text}`}>
-              <span className={`h-2 w-2 rounded-full ${statusCard.dot}`} />
-              {statusCard.label}
+          {/* Status panel — pin, status label, and a straight status-colored
+              left rule over a light gray tint, with the duration on the right.
+              Square edges, not a rounded card. */}
+          <div
+            className="flex items-center gap-3 border-l-2 bg-muted/50 py-2 pl-4 pr-3"
+            style={{ borderColor: statusPanel.fg }}
+          >
+            <Image src={statusPanel.pin} alt="" width={22} height={22} className="shrink-0" />
+            <div className="min-w-0 flex-1">
+              <div
+                className="text-xs font-bold uppercase tracking-wide"
+                style={{ color: statusPanel.fg }}
+              >
+                {statusPanel.label}
+              </div>
+              <p className="mt-0.5 text-sm font-medium text-foreground">
+                <StatusLine room={room} building={building} />
+              </p>
             </div>
-            <p className="mt-1 text-[15px] font-medium text-gray-900">
-              <StatusLine room={room} building={building} />
-            </p>
+            {minutesLeft !== null && (
+              <div className="shrink-0 pl-2 text-right">
+                <div className="text-lg font-semibold tabular-nums text-foreground">
+                  {formatDurationPadded(minutesLeft)}
+                </div>
+                <div className="text-[10px] font-semibold uppercase tracking-[0.09em] text-muted-foreground">
+                  left
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Availability rating */}

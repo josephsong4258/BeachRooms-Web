@@ -180,10 +180,7 @@ export default function Comments({ table, column, subjectId, placeholder }: Comm
           rows={2}
           className="flex w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         />
-        <div className="flex items-center justify-between">
-          <span className="text-xs text-muted-foreground">
-            {draft.length}/{MAX_LENGTH}
-          </span>
+        <div className="flex items-center justify-end">
           <Button type="submit" size="sm" disabled={!trimmed || postComment.isPending}>
             {postComment.isPending ? 'Posting…' : 'Post'}
           </Button>
