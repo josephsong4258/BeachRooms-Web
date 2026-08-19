@@ -191,7 +191,9 @@ export default function Home() {
                   compact
                   className="absolute top-3 right-3 z-10 shadow-md"
                 />
-                <MobileSheet>{sidebar}</MobileSheet>
+                <MobileSheet detailOpen={!!(viewBuildingId || viewParkingId || viewLibrary)}>
+                  {sidebar}
+                </MobileSheet>
               </div>
             ) : (
               // Mobile, map hidden: the list fills the screen (no sheet/map).

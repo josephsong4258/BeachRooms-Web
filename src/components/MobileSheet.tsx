@@ -3,15 +3,18 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 
 // Mobile layout: the campus map fills the screen and this draggable sheet rides
 // over it (peek / half / full snap points), holding the Sidebar's list. Opening
-// a detail page (building / room / parking / library / spot) keeps the sheet at
-// its current height and renders that detail inside it (with its own back
-// header), so the map stays visible above. The Sidebar stays mounted so its
-// search query and drill-down state survive.
+// a detail page (building / room / parking / library / spot) expands the sheet
+// to (nearly) full so the detail's room list gets most of the screen, and
+// renders that detail inside it (with its own back header). Backing out restores
+// the snap the sheet was at before the detail opened. The Sidebar stays mounted
+// so its search query and drill-down state survive.
 interface MobileSheetProps {
   children: React.ReactNode;
+  // True while any detail page is open. Drives the auto-expand / restore.
+  detailOpen?: boolean;
 }
 
-export default function MobileSheet({ children }: MobileSheetProps) {
+export default function MobileSheet({ children, detailOpen = false }: MobileSheetProps) {
   const stageRef = useRef<HTMLDivElement>(null);
   const [stageH, setStageH] = useState(0);
   useEffect(() => {
@@ -39,10 +42,6 @@ export default function MobileSheet({ children }: MobileSheetProps) {
     }
   }, [stageH, snaps.mid]);
 
-  // A detail page is a full-screen slide-over (the sheet's height is ignored
-  // while it's open), so we leave sheetH untouched. Backing out then restores
-  // the exact snap the sheet was at before the detail opened.
-
   const [dragging, setDragging] = useState(false);
   const drag = useRef<{ startY: number; startH: number } | null>(null);
 
@@ -53,6 +52,24 @@ export default function MobileSheet({ children }: MobileSheetProps) {
     },
     [snaps]
   );
+
+  // Opening a detail expands the sheet to full so its room list gets most of the
+  // screen; backing out restores the snap the sheet was at beforehand. We stash
+  // that snap in a ref on the open transition and replay it on close. Dragging
+  // while a detail is open just moves the sheet and doesn't disturb the stash.
+  const restoreRef = useRef<number | null>(null);
+  const prevDetailOpen = useRef(false);
+  useEffect(() => {
+    if (detailOpen === prevDetailOpen.current) return;
+    prevDetailOpen.current = detailOpen;
+    if (detailOpen) {
+      restoreRef.current = sheetH;
+      setSheetH(snaps.full);
+    } else if (restoreRef.current != null) {
+      setSheetH(nearestSnap(restoreRef.current));
+      restoreRef.current = null;
+    }
+  }, [detailOpen, sheetH, snaps.full, nearestSnap]);
 
   const onPointerDown = useCallback(
     (e: React.PointerEvent) => {
