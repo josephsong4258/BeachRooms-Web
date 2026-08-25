@@ -8,7 +8,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import InfoPopover from '@/components/InfoPopover';
 import HourBlock from '@/components/HourBlock';
 import RoomComments from '@/components/RoomComments';
-import RoomRating from '@/components/RoomRating';
+import RoomRating, { type RoomRatingBlock } from '@/components/RoomRating';
 import RoomStatusBadge from '@/components/RoomStatusBadge';
 import SignInDialog from '@/components/SignInDialog';
 import { useFavorites } from '@/lib/use-favorites';
@@ -19,6 +19,8 @@ import type { RoomAvailability, BuildingWithRooms, AvailabilityStatus } from '@/
 interface RoomDetailProps {
   room: RoomAvailability;
   building: BuildingWithRooms;
+  // Current term, used to scope "was it free?" votes so they reset each term.
+  semester: string;
   onBack: () => void;
   isMobile?: boolean;
 }
@@ -96,7 +98,15 @@ function StatusLine({ room, building }: { room: RoomAvailability; building: Buil
   return <>{room.statusText.split('\n')[0]}</>;
 }
 
-export default function RoomDetail({ room, building, onBack, isMobile = false }: RoomDetailProps) {
+const parseMinutes = (t: string): number => {
+  const [h, m] = t.split(':').map(Number);
+  return h * 60 + m;
+};
+
+const fmtMinutes = (mins: number): string =>
+  `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`;
+
+export default function RoomDetail({ room, building, semester, onBack, isMobile = false }: RoomDetailProps) {
   const { signedIn, favoriteRoomIds, toggleRoomFavorite } = useFavorites();
   const [showSignIn, setShowSignIn] = useState(false);
   const isFavorite = favoriteRoomIds.has(room.id);
@@ -124,6 +134,33 @@ export default function RoomDetail({ room, building, onBack, isMobile = false }:
     building.weekday_close,
     now
   );
+
+  // The recurring free block the room is in right now: bounded by the class
+  // that just ended (or building open) and the next class (or building close).
+  // Votes are confined to this block so a "was it free?" signal only counts for
+  // this weekday + window, and accumulates all term. Null when closed today.
+  const ratingBlock: RoomRatingBlock | null = todayHours
+    ? (() => {
+        let startMin = parseMinutes(todayHours.open);
+        let endMin = parseMinutes(todayHours.close);
+        for (const s of room.todaySchedules) {
+          const sMin = parseMinutes(s.start_time);
+          const eMin = parseMinutes(s.end_time);
+          if (eMin <= nowMinutes && eMin > startMin) startMin = eMin; // most recent class end
+          if (sMin > nowMinutes && sMin < endMin) endMin = sMin; // next class start
+        }
+        return {
+          semester,
+          day_of_week: now.getDay(),
+          block_start: fmtMinutes(startMin),
+          block_end: fmtMinutes(endMin),
+        };
+      })()
+    : null;
+
+  // Only ask "was it free?" when the room actually reads as free right now
+  // (open or limited). In-use / closed rooms hide the pills entirely.
+  const showRating = room.status === 'open' || room.status === 'limited';
 
   function formatTime(t: string) {
     const [h, m] = t.split(':').map(Number);
@@ -219,8 +256,15 @@ export default function RoomDetail({ room, building, onBack, isMobile = false }:
             )}
           </div>
 
-          {/* Availability rating */}
-          <RoomRating roomId={room.id} onRequireSignIn={() => setShowSignIn(true)} />
+          {/* Availability rating — only while the room reads as free, scoped to
+              the recurring time block it's in */}
+          {showRating && ratingBlock && (
+            <RoomRating
+              roomId={room.id}
+              block={ratingBlock}
+              onRequireSignIn={() => setShowSignIn(true)}
+            />
+          )}
 
           {/* Room info */}
           {room.is_accessible && (

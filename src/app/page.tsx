@@ -133,6 +133,7 @@ export default function Home() {
   const sidebar = (
     <Sidebar
       buildings={buildings}
+      semester={data?.semester ?? ''}
       isFetching={isFetching && !isLoading}
       selectedDateTime={selectedDateTime}
       onDateTimeChange={setSelectedDateTime}

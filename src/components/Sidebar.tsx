@@ -48,6 +48,8 @@ function isRoomFreeDuring(
 
 interface SidebarProps {
   buildings: BuildingWithRooms[];
+  // Current term, threaded to RoomDetail to scope room "was it free?" votes.
+  semester: string;
   isFetching: boolean;
   selectedDateTime: Date | null;
   onDateTimeChange: (dt: Date | null) => void;
@@ -70,6 +72,7 @@ interface SidebarProps {
 
 export default function Sidebar({
   buildings,
+  semester,
   isFetching,
   selectedDateTime,
   onDateTimeChange,
@@ -284,6 +287,7 @@ export default function Sidebar({
       <RoomDetail
         room={selectedRoom}
         building={selectedBuilding}
+        semester={semester}
         onBack={isMobile ? mobileBack : () => { setSelectedRoom(null); setSelectedBuilding(null); }}
         isMobile={isMobile}
       />

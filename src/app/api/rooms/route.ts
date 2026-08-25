@@ -241,7 +241,12 @@ export async function GET(request: NextRequest) {
 
   buildings.sort((a: BuildingWithRooms, b: BuildingWithRooms) => a.name.localeCompare(b.name));
 
-  const response: APIResponse = { buildings, queryTime: queryTime.toISOString() };
+  // One semester per scrape run (the scraper wipes the table each run), so any
+  // schedule row carries the current term. Empty string on weekends/empty data
+  // — votes still key off it consistently within a run.
+  const semester = allSchedules[0]?.semester ?? '';
+
+  const response: APIResponse = { buildings, queryTime: queryTime.toISOString(), semester };
 
   // CDN caches each URL (incl. date/time params) briefly so bursts of users
   // share one computation. Availability is minute-granular, so cap the total

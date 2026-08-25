@@ -106,6 +106,10 @@ export interface BuildingWithRooms {
 export interface APIResponse {
   buildings: BuildingWithRooms[];
   queryTime: string;
+  // The term the schedule data belongs to (scoped per scrape run — the scraper
+  // wipes the table each run, so every row shares one label). Used to scope
+  // room "was it free?" votes so they reset when the term rolls over.
+  semester: string;
 }
 
 export interface RoomComment {
