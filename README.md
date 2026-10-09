@@ -4,9 +4,7 @@
 
 BeachRooms is an interactive campus map showing which CSULB classrooms are free, how long they'll stay free, and when the next class starts. It works from the university's published class schedules, so students don't have to wander from building to building checking doors.
 
-<!-- TODO: add live link -->
-
-![BeachRooms campus map showing classroom availability by building](docs/screenshot.png)
+<img width="3816" height="1902" alt="image" src="https://github.com/user-attachments/assets/221e3bfb-5716-4b01-a658-cdfad92e5c59" />
 
 ## Features
 
